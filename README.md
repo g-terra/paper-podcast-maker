@@ -70,7 +70,7 @@ Other devices resolve `.local` names out of the box on macOS, iOS, Windows 10/11
 ### How it works
 
 1. The server extracts the paper's text (scanned PDFs without a text layer need OCR first).
-2. It asks the CLI for a JSON script sized to your min/max length (about 150 spoken words per minute), and retries once if the length is off.
+2. It asks the CLI for a JSON script sized to your min/max length (about 130 spoken words per minute, Kokoro's pace), and retries once if the length is off.
 3. Each line is spoken with the host's voice, and the clips are joined into one WAV. Hosts left on "Auto voice" each get a different installed voice.
 
 The CLI runs with no tools (Claude) or a read-only sandbox in an empty temp folder (Codex), and the server only listens on `127.0.0.1`.

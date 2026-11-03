@@ -5,6 +5,7 @@ import {
   type Episode,
   type ProvidersResponse,
   type Transcript,
+  WORDS_PER_MINUTE,
 } from '@paper-podcast/shared';
 import { buildApp, type BuildAppOptions } from './app.js';
 import { concatWav } from './audio/wav.js';
@@ -155,7 +156,7 @@ describe('server', () => {
     expect(episode.error).toBeUndefined();
     expect(episode.stage).toBe('done');
     expect(episode.transcript?.title).toBe('A test episode');
-    expect(episode.estimatedMinutes).toBeCloseTo(1400 / 150);
+    expect(episode.estimatedMinutes).toBeCloseTo(1400 / WORDS_PER_MINUTE);
     expect(prompts).toHaveLength(1);
     expect(prompts[0]).toContain('This paper studies things.');
 
