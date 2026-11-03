@@ -12,6 +12,7 @@ import { extractPdfText } from '../pdf.js';
 import { getProvider, type CommandLocator } from '../providers/index.js';
 import { assignVoices, engineVoices, speakLine, type TtsContext } from '../tts/index.js';
 import { kokoroModelReady } from '../tts/kokoro.js';
+import { elevenLabsDialogueWav } from '../tts/elevenlabs.js';
 import { readWav } from '../audio/wav.js';
 import { mixConversation, type MixLine } from '../audio/mix.js';
 import { buildTranscriptPrompt, parseTranscript, wordTargets } from './prompt.js';
@@ -253,6 +254,26 @@ export class EpisodeService {
     }
 
     const { lines } = transcript;
+    if (engine === 'elevenlabs') {
+      // ElevenLabs voices the whole conversation at once, with its own turn-taking.
+      const wav = await elevenLabsDialogueWav(
+        this.deps.tts,
+        lines.map((l) => ({ text: l.text, voice: voiceFor.get(l.speaker) ?? '' })),
+        {
+          seed: hashSeed(episode.id),
+          onProgress: (done, total) =>
+            this.update(episode, {
+              detail:
+                total > 1
+                  ? `Voicing the conversation with ElevenLabs (part ${done + 1} of ${total})`
+                  : 'Voicing the conversation with ElevenLabs',
+            }),
+        },
+      );
+      await writeFile(join(dir, AUDIO_FILE), wav);
+      return;
+    }
+
     const clips: MixLine[] = [];
     for (const [i, line] of lines.entries()) {
       await this.update(episode, {

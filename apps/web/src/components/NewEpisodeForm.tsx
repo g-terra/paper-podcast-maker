@@ -242,15 +242,21 @@ export function NewEpisodeForm({ providers, engines, onCreated }: Props) {
               setSettings((s) => ({ ...s, maxMinutes: v, minMinutes: Math.min(v, s.minMinutes) }))
             }
           />
-          <Slider
-            label="Speaking speed"
-            value={settings.speed}
-            min={0.7}
-            max={engineId === 'elevenlabs' ? 1.2 : 1.3}
-            step={0.05}
-            display={`${settings.speed.toFixed(2)}×`}
-            onChange={(v) => update('speed', v)}
-          />
+          {engineId === 'kokoro' ? (
+            <Slider
+              label="Speaking speed"
+              value={settings.speed}
+              min={0.7}
+              max={1.3}
+              step={0.05}
+              display={`${settings.speed.toFixed(2)}×`}
+              onChange={(v) => update('speed', v)}
+            />
+          ) : (
+            <p className="text-xs text-slate-500">
+              ElevenLabs voices the whole conversation in one go and sets its own pace.
+            </p>
+          )}
           <div className="space-y-1">
             <span className="text-sm font-medium">Audience</span>
             <div>

@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { readWav } from '../audio/wav.js';
 import {
+  dialogueBatches,
   describeElevenLabsVoice,
+  elevenLabsDialogueWav,
   elevenLabsKey,
   elevenLabsVoices,
   elevenLabsWav,
@@ -148,5 +150,57 @@ describe('elevenLabsWav', () => {
       next_text: 'After.',
       voice_settings: { speed: 1.2 },
     });
+  });
+});
+
+describe('ElevenLabs dialogue', () => {
+  it('batches a script at line boundaries under the character limit', () => {
+    const lines = [
+      { voice: 'a', text: 'x'.repeat(900) },
+      { voice: 'b', text: 'y'.repeat(900) },
+      { voice: 'a', text: 'z'.repeat(900) },
+    ];
+    expect(dialogueBatches(lines).map((b) => b.length)).toEqual([2, 1]);
+  });
+
+  it('splits one very long line between sentences', () => {
+    const text = 'One sentence here. '.repeat(150).trim();
+    const batches = dialogueBatches([{ voice: 'a', text }]);
+    expect(batches.flat().every((l) => l.text.length <= 2000)).toBe(true);
+    expect(
+      batches
+        .flat()
+        .map((l) => l.text)
+        .join(' '),
+    ).toBe(text);
+  });
+
+  it('voices the whole conversation with the dialogue model and joins the parts', async () => {
+    const pcm = Buffer.alloc(2400 * 2);
+    const { fn, calls } = fakeFetch(() => new Response(pcm));
+    const progress: string[] = [];
+    const wav = await elevenLabsDialogueWav(
+      { dataDir: await dataDir(), env: { ELEVENLABS_API_KEY: 'k' }, fetch: fn },
+      [
+        { voice: 'a', text: 'x'.repeat(1500) },
+        { voice: 'b', text: '[laughs] Really?' },
+        { voice: 'a', text: 'y'.repeat(1500) },
+      ],
+      { seed: 7, onProgress: (done, total) => void progress.push(`${done}/${total}`) },
+    );
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.url).toContain('/v1/text-to-dialogue?output_format=pcm_24000');
+    const body = JSON.parse(String(calls[0]!.init.body)) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      model_id: 'eleven_v3',
+      seed: 7,
+      inputs: [
+        { voice_id: 'a', text: 'x'.repeat(1500) },
+        { voice_id: 'b', text: '[laughs] Really?' },
+      ],
+    });
+    expect(progress).toEqual(['0/2', '1/2']);
+    // Two 0.1 s parts and a 0.3 s pause between them.
+    expect(readWav(wav).samples.length).toBe(2400 * 2 + 7200);
   });
 });

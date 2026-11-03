@@ -84,11 +84,16 @@ export function floatTo16(samples: Float32Array): Int16Array {
  * and reads "Uh-huh" as "uh-uh" (a no), so they become words that sound right.
  */
 export function speakable(text: string): string {
-  return text
-    .replace(/\b(?:m+-?hm+|m+ hm+|uh-?huh|uh huh)\b/gi, (m) =>
-      m[0] === m[0]?.toUpperCase() ? 'Yeah' : 'yeah',
-    )
-    .replace(/\b(?:hm+|m{2,})\b/gi, (m) => (m[0] === m[0]?.toUpperCase() ? 'Hmm' : 'hmm'));
+  return (
+    text
+      // Emotion cues like "[laughs]" are for ElevenLabs; Kokoro would read them out.
+      .replace(/\s*\[[^\]]*\]\s*/g, ' ')
+      .trim()
+      .replace(/\b(?:m+-?hm+|m+ hm+|uh-?huh|uh huh)\b/gi, (m) =>
+        m[0] === m[0]?.toUpperCase() ? 'Yeah' : 'yeah',
+      )
+      .replace(/\b(?:hm+|m{2,})\b/gi, (m) => (m[0] === m[0]?.toUpperCase() ? 'Hmm' : 'hmm'))
+  );
 }
 
 /** Speaks `text` and returns a 16-bit mono WAV. */
