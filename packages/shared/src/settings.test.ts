@@ -7,6 +7,15 @@ describe('PodcastSettingsSchema', () => {
     expect(PodcastSettingsSchema.safeParse(defaultSettings).success).toBe(true);
   });
 
+  it('fills optional fields', () => {
+    const { model, tone, ...rest } = defaultSettings;
+    void model;
+    void tone;
+    const parsed = PodcastSettingsSchema.parse(rest);
+    expect(parsed.model).toBe('');
+    expect(parsed.tone).toBe('');
+  });
+
   it('rejects a minimum longer than the maximum', () => {
     const result = PodcastSettingsSchema.safeParse({
       ...defaultSettings,
@@ -18,6 +27,20 @@ describe('PodcastSettingsSchema', () => {
 
   it('requires at least one host', () => {
     const result = PodcastSettingsSchema.safeParse({ ...defaultSettings, hosts: [] });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects duplicate host names', () => {
+    const host = defaultSettings.hosts[0]!;
+    const result = PodcastSettingsSchema.safeParse({
+      ...defaultSettings,
+      hosts: [host, { ...host, name: host.name.toUpperCase() }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects odd model names', () => {
+    const result = PodcastSettingsSchema.safeParse({ ...defaultSettings, model: 'x; rm -rf /' });
     expect(result.success).toBe(false);
   });
 });

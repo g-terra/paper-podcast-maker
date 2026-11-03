@@ -15,7 +15,38 @@ paper-podcast-maker is a local tool with a UI that takes an academic paper, uses
 
 ## Status
 
-Early stage. The monorepo is scaffolded: the UI shows episode settings and which AI CLIs the local server can find. Transcript generation and audio are not wired up yet.
+Working end to end: upload a PDF, pick your settings, and the app writes a script with your local Claude or Codex CLI, voices it with a local text-to-speech engine, and gives you a WAV you can play or download. You can edit the transcript and re-record.
+
+## Quick start
+
+You need Node.js 22+, pnpm (`corepack enable`), and:
+
+1. **A script writer**, at least one of:
+   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude`), signed in.
+   - [Codex CLI](https://github.com/openai/codex) (`codex`), signed in.
+2. **A voice engine**, at least one of:
+   - **macOS `say`**: built in. Nicer voices can be added in System Settings > Accessibility > Spoken Content.
+   - **Windows speech**: built in.
+   - **Piper** (natural neural voices, any OS): `pipx install piper-tts`, then download voices (an `.onnx` file plus its `.onnx.json`) from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) into `~/.paper-podcast-maker/piper-voices/`.
+   - **eSpeak NG** (robotic, any OS): `brew install espeak-ng` or `apt install espeak-ng`.
+
+Then:
+
+```sh
+pnpm install
+pnpm build
+pnpm start        # open http://127.0.0.1:8787
+```
+
+The app shows which CLIs and voice engines it found. Papers, transcripts and audio are kept in `~/.paper-podcast-maker/` (change it with `PPM_DATA_DIR`).
+
+### How it works
+
+1. The server extracts the paper's text (scanned PDFs without a text layer need OCR first).
+2. It asks the CLI for a JSON script sized to your min/max length (about 150 spoken words per minute), and retries once if the length is off.
+3. Each line is spoken with the host's voice, and the clips are joined into one WAV. Hosts left on "Auto voice" each get a different installed voice.
+
+The CLI runs with no tools (Claude) or a read-only sandbox in an empty temp folder (Codex), and the server only listens on `127.0.0.1`.
 
 ## Repository layout
 
@@ -49,7 +80,7 @@ Other scripts, run from the repo root:
 | `pnpm format`    | Prettier.                          |
 | `pnpm check`     | Everything CI runs.                |
 
-The server reads `PPM_HOST` and `PPM_PORT`; the web dev server reads `PPM_SERVER_URL` to know where to proxy.
+Server settings: `PPM_HOST`, `PPM_PORT`, `PPM_DATA_DIR`, `PPM_PIPER_VOICES_DIR`, `PPM_AI_TIMEOUT_MS` (default 15 minutes). The web dev server reads `PPM_SERVER_URL` to know where to proxy.
 
 ## License
 
