@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ppm: start, stop and check the paper-podcast-maker app from a terminal (macOS, Windows, Linux).
-//   ppm start [--port N] [--mdns [--mdns-name NAME]] [--foreground] | stop | restart | status | open | logs | build | link | help
+//   ppm setup | start [--port N] [--mdns [--mdns-name NAME]] [--foreground] | stop | restart | status | open | logs | build | link | help
 // The server runs in the background; its pid and port are kept in <data folder>/server.json.
 import { spawn, spawnSync } from 'node:child_process';
 import {
@@ -175,6 +175,23 @@ async function choosePort(args, host) {
   process.exit(1);
 }
 
+/**
+ * The environment for the server. When ppm runs inside a Claude Code session (its terminal, or an
+ * agent), that session's variables would leak into the `claude` CLI the server runs and point it
+ * at the session instead of your own login, so they are dropped.
+ */
+function serverEnv() {
+  const env = { ...process.env };
+  if (!env.CLAUDECODE) return env;
+  for (const key of Object.keys(env)) {
+    if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDE_PID$|CLAUDE_EFFORT$)/.test(key)) {
+      delete env[key];
+    }
+  }
+  delete env.ANTHROPIC_BASE_URL;
+  return env;
+}
+
 async function start(args) {
   const current = await running();
   if (current) {
@@ -188,7 +205,7 @@ async function start(args) {
   const host = process.env.PPM_HOST ?? (mdnsName ? '0.0.0.0' : HOST);
   const port = await choosePort(args, host);
   const env = {
-    ...process.env,
+    ...serverEnv(),
     PPM_PORT: String(port),
     PPM_HOST: host,
     PPM_MDNS: mdnsName ? '1' : '0',
@@ -315,8 +332,122 @@ function link() {
   warn(`No writable bin folder found. Add an alias instead: alias ppm='${SELF}'`);
 }
 
+const found = (bin) =>
+  spawnSync(WIN ? 'where' : 'which', [bin], { stdio: 'ignore', env: serverEnv() }).status === 0;
+const quiet = (cmd, args) =>
+  spawnSync(cmd, args, { encoding: 'utf8', shell: WIN, env: serverEnv(), timeout: 30_000 });
+
+/** Downloads the Kokoro voice model into the data folder (no-op when it is already there). */
+function downloadKokoro() {
+  const script = `
+    const { env } = await import('@huggingface/transformers');
+    env.cacheDir = process.argv[1];
+    const { KokoroTTS } = await import('kokoro-js');
+    await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', { dtype: 'q8', device: 'cpu' });`;
+  // Run from apps/server so the imports resolve to its node_modules.
+  return (
+    spawnSync(process.execPath, ['--input-type=module', '-e', script, join(DATA_DIR, 'models')], {
+      cwd: join(ROOT, 'apps/server'),
+      stdio: 'inherit',
+    }).status === 0
+  );
+}
+
+function claudeLoggedIn() {
+  const r = quiet('claude', ['auth', 'status']);
+  try {
+    return JSON.parse(r.stdout).loggedIn === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Installs, builds and checks everything the app needs. Safe to run again at any time. */
+async function setup() {
+  const results = [];
+  const step = (label, passed, fix = '') => {
+    results.push({ label, passed, fix });
+    (passed ? ok : fail)(passed ? label : `${label}${fix ? `: ${fix}` : ''}`);
+    return passed;
+  };
+
+  const major = Number(process.versions.node.split('.')[0]);
+  if (
+    !step(
+      `Node.js ${process.versions.node}`,
+      major >= 22,
+      'version 22 or newer is needed (https://nodejs.org)',
+    )
+  ) {
+    process.exit(1);
+  }
+  if (!found('pnpm') && found('corepack')) quiet('corepack', ['enable']);
+  if (
+    !step('pnpm', found('pnpm'), 'install it with `npm install -g pnpm` (or `corepack enable`)')
+  ) {
+    process.exit(1);
+  }
+
+  console.log('\nInstalling dependencies…');
+  if (!step('Dependencies installed', run('pnpm', ['install']), 'see the pnpm output above'))
+    process.exit(1);
+  console.log('\nBuilding the app…');
+  if (!step('App built', run('pnpm', ['build']), 'see the build output above')) process.exit(1);
+
+  console.log();
+  link();
+
+  console.log('\nGetting the Kokoro voice model (about 90 MB, only the first time)…');
+  step(
+    'Kokoro voices ready',
+    downloadKokoro(),
+    'check your internet connection, then run `ppm setup` again',
+  );
+
+  console.log('\nChecking the AI that writes the scripts…');
+  const hasClaude = found('claude');
+  let claudeOk = hasClaude && claudeLoggedIn();
+  if (hasClaude && !claudeOk && process.stdin.isTTY) {
+    warn(
+      'Claude Code is installed but not signed in. Opening the sign-in (finish it in your browser)…',
+    );
+    spawnSync('claude', ['auth', 'login'], { stdio: 'inherit', shell: WIN, env: serverEnv() });
+    claudeOk = claudeLoggedIn();
+  }
+  step(
+    'Claude Code signed in',
+    claudeOk,
+    hasClaude
+      ? 'run `claude auth login` and finish signing in in your browser'
+      : 'not installed (optional if you use Codex): https://docs.anthropic.com/en/docs/claude-code',
+  );
+  const hasCodex = found('codex');
+  step(
+    'Codex signed in',
+    hasCodex && quiet('codex', ['login', 'status']).status === 0,
+    hasCodex
+      ? 'run `codex login`'
+      : 'not installed (optional if you use Claude): https://github.com/openai/codex',
+  );
+
+  console.log();
+  const writers = results.filter((r) => r.label.endsWith('signed in') && r.passed).length;
+  if (writers === 0) {
+    fail(
+      'No AI is ready to write scripts yet. Fix one of the ✗ above, then run `ppm setup` again.',
+    );
+  } else {
+    ok('Setup done. Next: ppm open');
+    if (!WIN)
+      console.log(
+        "  (If your terminal says 'command not found: ppm', run `rehash` or open a new tab.)",
+      );
+  }
+}
+
 const HELP = `${paint('1', 'ppm: paper-podcast-maker')}
 
+  ppm setup          install, build, get the Kokoro voices and check your AI CLIs (rerun anytime)
   ppm start          start the app in the background (${urlFor(DEFAULT_PORT)}, or the next free port)
       --port N       use port N (or set PPM_PORT)
       --mdns         also open it to your network as http://paper-podcast.local:<port>
@@ -368,6 +499,9 @@ switch (cmd) {
   case 'build':
     ensureBuilt(true);
     ok('Built.');
+    break;
+  case 'setup':
+    await setup();
     break;
   case 'link':
     link();

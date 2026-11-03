@@ -26,20 +26,24 @@ You need Node.js 22+, pnpm (`corepack enable`), and:
    - [Codex CLI](https://github.com/openai/codex) (`codex`), signed in.
 2. **Nothing else for voices.** Voices come from **Kokoro**, which runs inside the app: natural-sounding American and British English voices you can preview in the app. The first preview or episode downloads the model once (about 90 MB, into `~/.paper-podcast-maker/models`).
 
-Then:
+Then, from the repo folder:
 
 ```sh
-pnpm start        # installs, builds and starts the app in the background
+pnpm run setup    # installs, builds, links `ppm`, downloads the Kokoro voices, checks your AI CLIs
+ppm open          # starts the app and opens it in your browser
 ```
 
-Then open the URL it prints (http://127.0.0.1:8787 unless that port is taken, in which case it picks the next free one). The app only offers the AI CLIs it finds (Claude defaults to Sonnet 5.5; Codex lists the models from your Codex setup). Papers, transcripts and audio are kept in `~/.paper-podcast-maker/` (change it with `PPM_DATA_DIR`).
+On macOS you can double-click `Setup Paper Podcast.command` instead, which does both. Setup is safe to run again at any time: it prints a ✓/✗ list and says how to fix anything missing (for example `claude auth login` when Claude Code isn't signed in). If your shell says `command not found: ppm` right after setup, run `rehash` or open a new terminal tab.
+
+`ppm open` and `ppm start` print the URL (http://127.0.0.1:8787 unless that port is taken, in which case it picks the next free one). The app only offers the AI CLIs it finds (Claude defaults to Sonnet 5.5; Codex lists the models from your Codex setup). Papers, transcripts and audio are kept in `~/.paper-podcast-maker/` (change it with `PPM_DATA_DIR`).
 
 ### The `ppm` command
 
-`pnpm start` runs `bin/ppm.mjs`, a small launcher. Run `pnpm ppm link` once to put it on your PATH as `ppm` (macOS/Linux), then:
+`ppm` is `bin/ppm.mjs`, a small launcher. Setup puts it on your PATH (macOS/Linux; `pnpm ppm link` does just that step). Then:
 
 | Command                  | Does                                                                                   |
 | ------------------------ | -------------------------------------------------------------------------------------- |
+| `ppm setup`              | Installs, builds, gets the Kokoro voices and checks your AI CLIs. Safe to rerun.       |
 | `ppm start`              | Starts the app in the background (builds it first if needed).                          |
 | `ppm start --port 9000`  | Uses another port (or set `PPM_PORT`). Without it, 8787 or the next free port is used. |
 | `ppm start --foreground` | Runs the server in this terminal instead.                                              |
