@@ -5,10 +5,25 @@ export const aiProviderIds = ['claude', 'codex'] as const;
 export const AiProviderIdSchema = z.enum(aiProviderIds);
 export type AiProviderId = z.infer<typeof AiProviderIdSchema>;
 
-/** Local text-to-speech engines the server can drive. */
-export const ttsEngineIds = ['kokoro', 'say', 'espeak-ng', 'piper', 'sapi'] as const;
-export const TtsEngineIdSchema = z.enum(ttsEngineIds);
-export type TtsEngineId = z.infer<typeof TtsEngineIdSchema>;
+/** A model a script writer can use; `id` is passed to the CLI's --model flag ('' = CLI default). */
+export interface ModelOption {
+  id: string;
+  label: string;
+}
+
+/** Known models per CLI. The first entry is the default. */
+export const providerModels: Record<AiProviderId, ModelOption[]> = {
+  claude: [
+    { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
+    { id: 'claude-opus-5-5', label: 'Opus 5.5' },
+    { id: 'claude-fable-5-1', label: 'Fable 5.1' },
+    { id: 'claude-haiku-5-5', label: 'Haiku 5.5' },
+  ],
+  codex: [{ id: '', label: 'Codex default model' }],
+};
+
+/** Kokoro reads at this speed by default (1 = normal). */
+export const DEFAULT_SPEED = 1;
 
 export const HostSchema = z.object({
   /** Display name used in the transcript, e.g. "Alex". */
@@ -21,8 +36,8 @@ export const HostSchema = z.object({
   /** Free-form role description, e.g. "curious interviewer" or "paper expert". */
   role: z.string().trim().min(1, 'Host role is required').max(300),
   /**
-   * Voice for the configured TTS engine. Empty means "pick one for me": the
-   * server assigns a different installed voice to each host.
+   * Kokoro voice id, e.g. "af_heart". Empty means "pick one for me": the
+   * server gives each host a different voice.
    */
   voice: z.string().trim().max(500).default(''),
 });
@@ -54,7 +69,8 @@ export const PodcastSettingsSchema = z
     audience: AudienceLevelSchema,
     /** Optional free-form tone guidance, e.g. "light and playful". */
     tone: z.string().trim().max(300).default(''),
-    ttsEngine: TtsEngineIdSchema,
+    /** Kokoro speaking speed: 0.7 (slow) to 1.3 (fast). */
+    speed: z.number().min(0.7).max(1.3).default(DEFAULT_SPEED),
   })
   .refine((s) => s.minMinutes <= s.maxMinutes, {
     message: 'Minimum length must not exceed maximum length',
@@ -65,7 +81,7 @@ export type PodcastSettingsInput = z.input<typeof PodcastSettingsSchema>;
 
 export const defaultSettings: PodcastSettings = {
   provider: 'claude',
-  model: '',
+  model: 'claude-sonnet-5-5',
   minMinutes: 5,
   maxMinutes: 10,
   hosts: [
@@ -74,5 +90,5 @@ export const defaultSettings: PodcastSettings = {
   ],
   audience: 'general',
   tone: '',
-  ttsEngine: 'kokoro',
+  speed: DEFAULT_SPEED,
 };

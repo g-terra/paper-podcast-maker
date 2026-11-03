@@ -1,4 +1,4 @@
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { KokoroTTS } from 'kokoro-js';
@@ -30,6 +30,16 @@ export function loadKokoro(modelsDir: string): Promise<KokoroTTS> {
 }
 
 /** True when the kokoro-js package is installed. */
+/** True once the model files are in the cache (no download needed). */
+export async function kokoroModelReady(modelsDir: string): Promise<boolean> {
+  try {
+    const files = await readdir(join(modelsDir, ...KOKORO_MODEL.split('/'), 'onnx'));
+    return files.some((f) => f.endsWith('.onnx'));
+  } catch {
+    return false;
+  }
+}
+
 export function kokoroInstalled(): boolean {
   try {
     import.meta.resolve('kokoro-js');
@@ -62,17 +72,19 @@ export function floatTo16(samples: Float32Array): Int16Array {
   return out;
 }
 
-export async function kokoroSynthesize(
+/** Speaks `text` and returns a 16-bit mono WAV. */
+export async function kokoroWav(
   modelsDir: string,
-  { textFile, outFile, voice }: { textFile: string; outFile: string; voice: string },
-): Promise<void> {
+  text: string,
+  voice: string,
+  speed = 1,
+): Promise<Buffer> {
   const tts = await loadKokoro(modelsDir);
-  const text = await readFile(textFile, 'utf8');
   const chunks: Float32Array[] = [];
   let sampleRate = 24000;
   // stream() splits into sentences, which keeps each chunk under the model's token limit.
   // Voice ids come from kokoroVoices(); the type is a fixed union of them.
-  const options = { voice: (voice || 'af_heart') as 'af_heart' };
+  const options = { voice: (voice || 'af_heart') as 'af_heart', speed };
   // Pass a closed splitter: given a plain string, kokoro-js 1.2 never closes its own splitter,
   // so the stream waits for more text forever after the last sentence.
   const { TextSplitterStream } = await import('kokoro-js');
@@ -90,5 +102,5 @@ export async function kokoroSynthesize(
     all.set(c, offset);
     offset += c.length;
   }
-  await writeFile(outFile, concatWav([{ sampleRate, samples: floatTo16(all) }], 0));
+  return concatWav([{ sampleRate, samples: floatTo16(all) }], 0);
 }

@@ -58,6 +58,41 @@ describe('server', () => {
     const body = res.json<ProvidersResponse>();
     expect(body.providers.find((p) => p.id === 'claude')?.available).toBe(true);
     expect(body.providers.find((p) => p.id === 'codex')?.available).toBe(false);
+    expect(body.providers.find((p) => p.id === 'claude')?.models[0]?.id).toBe('claude-sonnet-5-5');
+  });
+
+  it('lists Kokoro voices and speaks a preview', async () => {
+    const spoken: string[] = [];
+    await make({
+      speak: async (text, voice) => {
+        spoken.push(`${voice}:${text}`);
+        return concatWav([{ sampleRate: 8000, samples: new Int16Array(10) }]);
+      },
+    });
+    const voices = await app!.inject({ method: 'GET', url: '/api/voices' });
+    expect(voices.json<{ voices: { id: string }[] }>().voices[0]?.id).toBe('af_heart');
+
+    const preview = await app!.inject({
+      method: 'POST',
+      url: '/api/voices/preview',
+      payload: { voice: 'am_michael', text: 'Hello there' },
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.headers['content-type']).toBe('audio/wav');
+    // Cached on the second request.
+    await app!.inject({
+      method: 'POST',
+      url: '/api/voices/preview',
+      payload: { voice: 'am_michael', text: 'Hello there' },
+    });
+    expect(spoken).toEqual(['am_michael:Hello there']);
+
+    const bad = await app!.inject({
+      method: 'POST',
+      url: '/api/voices/preview',
+      payload: { voice: '../etc' },
+    });
+    expect(bad.statusCode).toBe(400);
   });
 
   it('validates settings', async () => {

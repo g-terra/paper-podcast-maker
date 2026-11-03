@@ -10,7 +10,8 @@ import {
 } from '@paper-podcast/shared';
 import { extractPdfText } from '../pdf.js';
 import { getProvider, type CommandLocator } from '../providers/index.js';
-import { assignVoices, getTtsEngine, preferredVoices, type TtsContext } from '../tts/index.js';
+import { assignVoices, type TtsContext } from '../tts/index.js';
+import { kokoroModelReady, kokoroVoices, kokoroWav } from '../tts/kokoro.js';
 import { concatWav, readWav, type Pcm } from '../audio/wav.js';
 import { buildTranscriptPrompt, parseTranscript, wordTargets } from './prompt.js';
 
@@ -235,39 +236,33 @@ export class EpisodeService {
     settings: PodcastSettings,
     dir: string,
   ) {
-    const engine = getTtsEngine(settings.ttsEngine);
-    const exe = await engine.locate();
-    if (!exe) throw new Error(`${engine.label} is not available on this machine. ${engine.hint}`);
-    const installed = await engine.listVoices(exe, this.deps.tts);
+    const installed = await kokoroVoices();
     const voices = assignVoices(
       settings.hosts.map((h) => h.voice),
       installed,
-      preferredVoices[engine.id],
     );
     const voiceFor = new Map(settings.hosts.map((h, i) => [h.name, voices[i] ?? '']));
-
-    const clipsDir = join(dir, 'clips');
-    await rm(clipsDir, { recursive: true, force: true });
-    await mkdir(clipsDir, { recursive: true });
+    if (!(await kokoroModelReady(this.deps.tts.modelsDir))) {
+      await this.update(episode, {
+        detail: 'Downloading the Kokoro voice model (once, about 90 MB)',
+      });
+    }
 
     const clips: Pcm[] = [];
     for (const [i, line] of transcript.lines.entries()) {
       await this.update(episode, {
         detail: `Voicing line ${i + 1} of ${transcript.lines.length}`,
       });
-      const textFile = join(clipsDir, `${i}.txt`);
-      const outFile = join(clipsDir, `${i}.wav`);
-      await writeFile(textFile, line.text, 'utf8');
-      await engine.synthesize(
-        exe,
-        { textFile, outFile, voice: voiceFor.get(line.speaker) ?? '' },
-        this.deps.tts,
+      const wav = await kokoroWav(
+        this.deps.tts.modelsDir,
+        line.text,
+        voiceFor.get(line.speaker) ?? '',
+        settings.speed,
       );
-      clips.push(readWav(await readFile(outFile)));
+      clips.push(readWav(wav));
     }
 
     await this.update(episode, { detail: 'Joining the audio' });
     await writeFile(join(dir, AUDIO_FILE), concatWav(clips));
-    await rm(clipsDir, { recursive: true, force: true });
   }
 }

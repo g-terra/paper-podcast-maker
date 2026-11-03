@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Episode, ProviderStatus, TtsEngineStatus } from '@paper-podcast/shared';
+import type { Episode, ProviderStatus, Voice } from '@paper-podcast/shared';
 import { api } from './lib/api';
 import { NewEpisodeForm } from './components/NewEpisodeForm';
 import { EpisodeView } from './components/EpisodeView';
@@ -7,7 +7,7 @@ import { EpisodeView } from './components/EpisodeView';
 type ServerState =
   | { kind: 'loading' }
   | { kind: 'offline' }
-  | { kind: 'online'; providers: ProviderStatus[]; engines: TtsEngineStatus[] };
+  | { kind: 'online'; providers: ProviderStatus[]; voices: Voice[]; modelReady: boolean };
 
 export function App() {
   const [server, setServer] = useState<ServerState>({ kind: 'loading' });
@@ -15,9 +15,9 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    Promise.all([api.providers(), api.tts(), api.episodes()])
-      .then(([{ providers }, { engines }, { episodes }]) => {
-        setServer({ kind: 'online', providers, engines });
+    Promise.all([api.providers(), api.voices(), api.episodes()])
+      .then(([{ providers }, { voices, modelReady }, { episodes }]) => {
+        setServer({ kind: 'online', providers, voices, modelReady });
         setEpisodes(episodes);
         setSelectedId((id) => id ?? episodes[0]?.id ?? null);
       })
@@ -84,7 +84,8 @@ export function App() {
             <div className="space-y-6">
               <NewEpisodeForm
                 providers={server.providers}
-                engines={server.engines}
+                voices={server.voices}
+                modelReady={server.modelReady}
                 onCreated={(ep) => {
                   upsert(ep);
                   setSelectedId(ep.id);

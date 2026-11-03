@@ -1,4 +1,4 @@
-import type { PodcastSettings, TtsEngineId, AiProviderId } from './settings.js';
+import type { AiProviderId, ModelOption, PodcastSettings } from './settings.js';
 import type { Transcript } from './transcript.js';
 
 /** Response of `GET /api/health`. */
@@ -15,25 +15,35 @@ export interface ProviderStatus {
   command: string;
   /** Whether the CLI was found on this machine. */
   available: boolean;
+  /** Models to offer; the first is the default. */
+  models: ModelOption[];
 }
 
 export interface ProvidersResponse {
   providers: ProviderStatus[];
 }
 
-/** One entry of `GET /api/tts`. */
-export interface TtsEngineStatus {
-  id: TtsEngineId;
-  label: string;
-  available: boolean;
-  /** Installed voices; empty when the engine is unavailable. */
-  voices: string[];
-  /** Short hint shown when the engine is missing or has no voices. */
-  hint: string;
+/** One Kokoro voice, from `GET /api/voices`. */
+export interface Voice {
+  /** Kokoro id, e.g. "af_heart". */
+  id: string;
+  /** Display name, e.g. "Heart". */
+  name: string;
+  gender: 'female' | 'male';
+  accent: 'American' | 'British';
 }
 
-export interface TtsEnginesResponse {
-  engines: TtsEngineStatus[];
+export interface VoicesResponse {
+  voices: Voice[];
+  /** False until the Kokoro model has been downloaded (the first preview or episode does it). */
+  modelReady: boolean;
+}
+
+/** Body of `POST /api/voices/preview`; the reply is a WAV file. */
+export interface VoicePreviewRequest {
+  voice: string;
+  text?: string;
+  speed?: number;
 }
 
 export const episodeStages = [

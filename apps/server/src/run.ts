@@ -21,6 +21,19 @@ export class CommandError extends Error {
   }
 }
 
+/** Set by a parent Claude Code session; they make a nested `claude` act as a child session. */
+const SESSION_VARS = new Set([
+  'CLAUDECODE',
+  'CLAUDE_CODE_ENTRYPOINT',
+  'CLAUDE_CODE_SSE_PORT',
+  'CLAUDE_CODE_EXECPATH',
+]);
+
+/** The environment for CLIs we start, as if run from a normal terminal. */
+export function cleanEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !SESSION_VARS.has(key)));
+}
+
 /**
  * Runs a command without a shell and collects its output. On Windows, `.cmd`
  * and `.bat` shims (how npm installs CLIs) need a shell, so arguments must
@@ -36,6 +49,7 @@ export function runCommand(
     const needsShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(command);
     const child = spawn(needsShell ? `"${command}"` : command, args, {
       cwd: options.cwd,
+      env: cleanEnv(process.env),
       shell: needsShell,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,

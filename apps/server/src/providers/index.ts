@@ -1,7 +1,12 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AiProviderId, ProviderStatus } from '@paper-podcast/shared';
+import {
+  providerModels,
+  type AiProviderId,
+  type ModelOption,
+  type ProviderStatus,
+} from '@paper-podcast/shared';
 import { CommandError, runCommand } from '../run.js';
 import { findOnPath } from './path.js';
 
@@ -103,15 +108,68 @@ export function getProvider(id: AiProviderId): ProviderDefinition {
   return provider;
 }
 
+/** Parses `codex debug models` JSON into the listed models. */
+export function parseCodexModels(stdout: string): ModelOption[] {
+  const parsed = JSON.parse(stdout) as {
+    models?: { slug?: string; display_name?: string; visibility?: string; priority?: number }[];
+  };
+  return (parsed.models ?? [])
+    .filter((m) => m.slug && m.visibility !== 'hide')
+    .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+    .map((m) => ({ id: m.slug!, label: m.display_name || m.slug! }));
+}
+
+/** The `model = "..."` line of ~/.codex/config.toml, if any. */
+export function parseCodexDefault(toml: string): string | undefined {
+  return /^\s*model\s*=\s*"([^"]+)"/m.exec(toml)?.[1];
+}
+
+export type ModelLister = (id: AiProviderId, executable: string) => Promise<ModelOption[]>;
+
+/** Models for a CLI, best effort: Codex can list its catalog; Claude only takes known names. */
+export const defaultModelLister: ModelLister = async (id, executable) => {
+  if (id !== 'codex') return providerModels[id];
+  let models: ModelOption[] = [];
+  try {
+    const { stdout } = await runCommand(executable, ['debug', 'models'], { timeoutMs: 20_000 });
+    models = parseCodexModels(stdout);
+  } catch {
+    // `debug models` is an internal command and may change; fall back to the CLI default.
+  }
+  const configured = parseCodexDefault(
+    await readFile(join(homedir(), '.codex', 'config.toml'), 'utf8').catch(() => ''),
+  );
+  if (configured) {
+    // Put the user's configured model first so it is the default.
+    const label = models.find((m) => m.id === configured)?.label ?? configured;
+    models = [
+      { id: configured, label: `${label} (your default)` },
+      ...models.filter((m) => m.id !== configured),
+    ];
+  }
+  return models.length ? models : providerModels.codex;
+};
+
+let modelCache: Partial<Record<AiProviderId, ModelOption[]>> = {};
+export function clearModelCache() {
+  modelCache = {};
+}
+
 export async function detectProviders(
   locate: CommandLocator = defaultLocator,
+  listModels: ModelLister = defaultModelLister,
 ): Promise<ProviderStatus[]> {
   return Promise.all(
-    providerDefinitions.map(async ({ id, label, command }) => ({
-      id,
-      label,
-      command,
-      available: (await locate(command)) !== null,
-    })),
+    providerDefinitions.map(async ({ id, label, command }) => {
+      const exe = await locate(command);
+      if (exe && !modelCache[id]) modelCache[id] = await listModels(id, exe);
+      return {
+        id,
+        label,
+        command,
+        available: exe !== null,
+        models: (exe && modelCache[id]) || providerModels[id],
+      };
+    }),
   );
 }

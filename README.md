@@ -24,11 +24,7 @@ You need Node.js 22+, pnpm (`corepack enable`), and:
 1. **A script writer**, at least one of:
    - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude`), signed in.
    - [Codex CLI](https://github.com/openai/codex) (`codex`), signed in.
-2. **A voice engine.** **Kokoro** is built in and is the default: natural-sounding English voices that run inside the app, with no install needed. The first episode downloads the model once (about 90 MB, into `~/.paper-podcast-maker/models`). The other engines are optional:
-   - **macOS `say`**: built in. Nicer voices can be added in System Settings > Accessibility > Spoken Content.
-   - **Windows speech**: built in.
-   - **Piper** (natural neural voices, any OS): `pipx install piper-tts`, then download voices (an `.onnx` file plus its `.onnx.json`) from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) into `~/.paper-podcast-maker/piper-voices/`.
-   - **eSpeak NG** (robotic, any OS): `brew install espeak-ng` or `apt install espeak-ng`.
+2. **Nothing else for voices.** Voices come from **Kokoro**, which runs inside the app: natural-sounding American and British English voices you can preview in the app. The first preview or episode downloads the model once (about 90 MB, into `~/.paper-podcast-maker/models`).
 
 Then:
 
@@ -36,7 +32,7 @@ Then:
 pnpm start        # installs, builds and starts the app in the background
 ```
 
-Then open the URL it prints (http://127.0.0.1:8787 unless that port is taken, in which case it picks the next free one). The app shows which CLIs and voice engines it found. Papers, transcripts and audio are kept in `~/.paper-podcast-maker/` (change it with `PPM_DATA_DIR`).
+Then open the URL it prints (http://127.0.0.1:8787 unless that port is taken, in which case it picks the next free one). The app only offers the AI CLIs it finds (Claude defaults to Sonnet 5.5; Codex lists the models from your Codex setup). Papers, transcripts and audio are kept in `~/.paper-podcast-maker/` (change it with `PPM_DATA_DIR`).
 
 ### The `ppm` command
 
@@ -109,7 +105,7 @@ Other scripts, run from the repo root:
 | `pnpm format`    | Prettier.                          |
 | `pnpm check`     | Everything CI runs.                |
 
-Server settings: `PPM_HOST`, `PPM_PORT`, `PPM_DATA_DIR`, `PPM_PIPER_VOICES_DIR`, `PPM_AI_TIMEOUT_MS` (default 15 minutes). The web dev server reads `PPM_SERVER_URL` to know where to proxy.
+Server settings: `PPM_HOST`, `PPM_PORT`, `PPM_DATA_DIR`, `PPM_MODELS_DIR`, `PPM_KOKORO_DTYPE` (default `q8`), `PPM_AI_TIMEOUT_MS` (default 15 minutes). The web dev server reads `PPM_SERVER_URL` to know where to proxy.
 
 ## License
 

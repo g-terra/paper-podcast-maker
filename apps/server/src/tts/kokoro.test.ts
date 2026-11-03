@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { floatTo16, kokoroInstalled, kokoroVoices } from './kokoro.js';
-import { assignVoices, preferredVoices } from './index.js';
+import { assignVoices } from './index.js';
 
 describe('kokoro', () => {
   it('is installed and lists its bundled voices without loading the model', async () => {
@@ -12,10 +12,7 @@ describe('kokoro', () => {
 
   it('gives two auto hosts a woman and a man', async () => {
     const voices = await kokoroVoices();
-    expect(assignVoices(['', ''], voices, preferredVoices.kokoro)).toEqual([
-      'af_heart',
-      'am_michael',
-    ]);
+    expect(assignVoices(['', ''], voices)).toEqual(['af_heart', 'am_michael']);
   });
 
   it('converts float samples to 16-bit PCM with clipping', () => {

@@ -5,7 +5,8 @@ import type {
   PodcastSettings,
   ProvidersResponse,
   Transcript,
-  TtsEnginesResponse,
+  VoicePreviewRequest,
+  VoicesResponse,
 } from '@paper-podcast/shared';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -20,7 +21,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<HealthResponse>('/api/health'),
   providers: () => request<ProvidersResponse>('/api/providers'),
-  tts: () => request<TtsEnginesResponse>('/api/tts'),
+  voices: () => request<VoicesResponse>('/api/voices'),
+  previewVoice: async (body: VoicePreviewRequest): Promise<Blob> => {
+    const res = await fetch('/api/voices/preview', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(err?.error ?? `Preview failed with ${res.status}`);
+    }
+    return res.blob();
+  },
   episodes: () => request<EpisodesResponse>('/api/episodes'),
   episode: (id: string) => request<Episode>(`/api/episodes/${id}`),
   createEpisode: (paper: File, settings: PodcastSettings) => {
