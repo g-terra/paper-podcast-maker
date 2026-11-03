@@ -16,9 +16,12 @@
     "@fastify/static": "^10.1.8",
     "@paper-podcast/shared": "workspace:*",
     "fastify": "^5.12.8",
+    "multicast-dns": "^7.2.5",
     "unpdf": "^2.1.0"
   },
   "devDependencies": {
+    "@types/dns-packet": "^5.6.5",
+    "@types/multicast-dns": "^7.2.4",
     "tsup": "^9.0.0",
     "tsx": "^4.23.15"
   }

@@ -11,5 +11,7 @@ export async function testConfig(): Promise<ServerConfig> {
     dataDir,
     piperVoicesDir: join(dataDir, 'piper'),
     aiTimeoutMs: 1000,
+    mdns: false,
+    mdnsName: 'paper-podcast',
   };
 }
