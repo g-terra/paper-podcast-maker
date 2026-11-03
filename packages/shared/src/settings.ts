@@ -25,6 +25,11 @@ export const providerModels: Record<AiProviderId, ModelOption[]> = {
 /** Kokoro reads at this speed by default (1 = normal). */
 export const DEFAULT_SPEED = 1;
 
+/** Text-to-speech engines: Kokoro runs on this machine, ElevenLabs is a cloud service. */
+export const ttsEngineIds = ['kokoro', 'elevenlabs'] as const;
+export const TtsEngineSchema = z.enum(ttsEngineIds);
+export type TtsEngine = z.infer<typeof TtsEngineSchema>;
+
 /**
  * The two host personalities an episode always has: a calm, deep-voiced anchor who frames the
  * conversation, and an upbeat explainer who walks through the findings.
@@ -35,21 +40,29 @@ export type HostPersona = z.infer<typeof HostPersonaSchema>;
 
 export const hostPersonas: Record<
   HostPersona,
-  { label: string; description: string; gender: 'male' | 'female'; defaultVoice: string }
+  {
+    label: string;
+    description: string;
+    gender: 'male' | 'female';
+    /** Default voice per engine: Kokoro id, and an ElevenLabs default-library voice id. */
+    defaultVoices: Record<TtsEngine, string>;
+  }
 > = {
   anchor: {
     label: 'Calm anchor',
     description:
       'Deep-voiced, calm and authoritative. Opens with the hook, asks the framing questions a smart listener would ask, and moves the conversation from one chapter to the next.',
     gender: 'male',
-    defaultVoice: 'am_michael',
+    // ElevenLabs: George, a warm, deep British narrator.
+    defaultVoices: { kokoro: 'am_michael', elevenlabs: 'JBFqnCBsd6RMkjVDRZzb' },
   },
   explainer: {
     label: 'Upbeat explainer',
     description:
       'Warm, upbeat and enthusiastic. Explains the findings clearly with everyday examples, reacts with genuine excitement ("That\'s such a wild idea!"), and gives the practical tips.',
     gender: 'female',
-    defaultVoice: 'af_heart',
+    // ElevenLabs: Sarah, a bright, upbeat American voice.
+    defaultVoices: { kokoro: 'af_heart', elevenlabs: 'EXAVITQu4vr4xnSDxMaL' },
   },
 };
 
@@ -62,7 +75,7 @@ export const HostSchema = z.object({
     .max(40)
     .regex(/^[^\n:]+$/, 'Host name cannot contain ":" or line breaks'),
   persona: HostPersonaSchema,
-  /** Kokoro voice id, e.g. "am_michael". Empty means the persona's default voice. */
+  /** Voice id for the chosen engine. Empty means the persona's default voice. */
   voice: z.string().trim().max(500).default(''),
 });
 export type Host = z.infer<typeof HostSchema>;
@@ -96,7 +109,9 @@ export const PodcastSettingsSchema = z
     audience: AudienceLevelSchema,
     /** Optional free-form tone guidance, e.g. "light and playful". */
     tone: z.string().trim().max(300).default(''),
-    /** Kokoro speaking speed: 0.7 (slow) to 1.3 (fast). */
+    /** Which engine voices the episode. */
+    engine: TtsEngineSchema.default('kokoro'),
+    /** Kokoro speaking speed: 0.7 (slow) to 1.3 (fast). ElevenLabs sets its own pace. */
     speed: z.number().min(0.7).max(1.3).default(DEFAULT_SPEED),
   })
   .refine((s) => s.minMinutes <= s.maxMinutes, {
@@ -117,5 +132,6 @@ export const defaultSettings: PodcastSettings = {
   ],
   audience: 'general',
   tone: '',
+  engine: 'kokoro',
   speed: DEFAULT_SPEED,
 };
