@@ -3,9 +3,12 @@ import { basename, join } from 'node:path';
 import type { TtsEngineId, TtsEngineStatus } from '@paper-podcast/shared';
 import { findOnPath } from '../providers/path.js';
 import { runCommand } from '../run.js';
+import { kokoroInstalled, kokoroSynthesize, kokoroVoices } from './kokoro.js';
 
 export interface TtsContext {
   piperVoicesDir: string;
+  /** Where downloaded TTS models (Kokoro) are cached. */
+  modelsDir: string;
 }
 
 export interface TtsEngine {
@@ -22,6 +25,15 @@ export interface TtsEngine {
   ): Promise<void>;
   hint: string;
 }
+
+const kokoro: TtsEngine = {
+  id: 'kokoro',
+  label: 'Kokoro (neural, recommended)',
+  hint: 'Natural voices that run inside the app. The first episode downloads the model once (about 90 MB).',
+  locate: async () => (kokoroInstalled() ? 'kokoro' : null),
+  listVoices: () => kokoroVoices(),
+  synthesize: (_exe, args, ctx) => kokoroSynthesize(ctx.modelsDir, args),
+};
 
 const say: TtsEngine = {
   id: 'say',
@@ -126,7 +138,7 @@ const sapi: TtsEngine = {
   },
 };
 
-export const ttsEngines: readonly TtsEngine[] = [say, piper, espeak, sapi];
+export const ttsEngines: readonly TtsEngine[] = [kokoro, say, piper, espeak, sapi];
 
 export function getTtsEngine(id: TtsEngineId): TtsEngine {
   const engine = ttsEngines.find((e) => e.id === id);
@@ -184,6 +196,8 @@ export function assignVoices(chosen: string[], installed: string[], preferred: s
 
 /** Voices that sound good as defaults, per engine, best first. */
 export const preferredVoices: Record<TtsEngineId, string[]> = {
+  // A woman and a man first, so two hosts sound clearly different.
+  kokoro: ['af_heart', 'am_michael', 'bf_emma', 'bm_george', 'af_bella', 'am_fenrir'],
   say: ['Samantha', 'Daniel', 'Karen', 'Moira', 'Alex', 'Fred'],
   'espeak-ng': ['en-us', 'en-gb+f3', 'en-gb', 'en-us+f3'],
   piper: [],

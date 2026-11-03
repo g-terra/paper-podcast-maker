@@ -9,6 +9,7 @@ export async function testConfig(): Promise<ServerConfig> {
     host: '127.0.0.1',
     port: 0,
     dataDir,
+    modelsDir: join(dataDir, 'models'),
     piperVoicesDir: join(dataDir, 'piper'),
     aiTimeoutMs: 1000,
     mdns: false,

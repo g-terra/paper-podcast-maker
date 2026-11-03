@@ -24,7 +24,7 @@ You need Node.js 22+, pnpm (`corepack enable`), and:
 1. **A script writer**, at least one of:
    - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude`), signed in.
    - [Codex CLI](https://github.com/openai/codex) (`codex`), signed in.
-2. **A voice engine**, at least one of:
+2. **A voice engine.** **Kokoro** is built in and is the default: natural-sounding English voices that run inside the app, with no install needed. The first episode downloads the model once (about 90 MB, into `~/.paper-podcast-maker/models`). The other engines are optional:
    - **macOS `say`**: built in. Nicer voices can be added in System Settings > Accessibility > Spoken Content.
    - **Windows speech**: built in.
    - **Piper** (natural neural voices, any OS): `pipx install piper-tts`, then download voices (an `.onnx` file plus its `.onnx.json`) from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) into `~/.paper-podcast-maker/piper-voices/`.

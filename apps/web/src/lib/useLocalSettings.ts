@@ -5,7 +5,8 @@ import {
   type PodcastSettings,
 } from '@paper-podcast/shared';
 
-const KEY = 'ppm.settings';
+// v2: Kokoro became the default voice engine.
+const KEY = 'ppm.settings.v2';
 
 /** Settings persisted in localStorage so they survive reloads. */
 export function useLocalSettings() {
