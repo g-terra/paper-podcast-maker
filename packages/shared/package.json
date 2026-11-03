@@ -1,0 +1,17 @@
+{
+  "name": "@paper-podcast/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Types and schemas shared by the web app and the local server.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}
