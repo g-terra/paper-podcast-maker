@@ -18,8 +18,8 @@ export const TranscriptSchema = z.object({
 });
 export type Transcript = z.infer<typeof TranscriptSchema>;
 
-/** Rough speaking rate used to estimate episode length from text. */
-export const WORDS_PER_MINUTE = 150;
+/** Kokoro's measured speaking pace at speed 1 (about 128 words a minute). */
+export const WORDS_PER_MINUTE = 130;
 
 export function countWords(transcript: Pick<Transcript, 'lines'>): number {
   return transcript.lines.reduce(
