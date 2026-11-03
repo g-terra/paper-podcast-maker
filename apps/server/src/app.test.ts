@@ -3,7 +3,6 @@ import type { FastifyInstance } from 'fastify';
 import {
   defaultSettings,
   type Episode,
-  type EnginesResponse,
   type ProvidersResponse,
   type Transcript,
   WORDS_PER_MINUTE,
@@ -95,47 +94,6 @@ describe('server', () => {
       payload: { voice: '../etc' },
     });
     expect(bad.statusCode).toBe(400);
-  });
-
-  it('reports ElevenLabs as needing a key until one is set', async () => {
-    await make({ tts: { env: {} } });
-    const res = await app!.inject({ method: 'GET', url: '/api/engines' });
-    const engines = res.json<EnginesResponse>().engines;
-    expect(engines.map((e) => [e.id, e.available])).toEqual([
-      ['kokoro', true],
-      ['elevenlabs', false],
-    ]);
-    const voices = await app!.inject({ method: 'GET', url: '/api/voices?engine=elevenlabs' });
-    expect(voices.statusCode).toBe(502);
-    expect(voices.json<{ error: string }>().error).toMatch(/API key/);
-  });
-
-  it('lists ElevenLabs voices and previews them with that engine', async () => {
-    const engines: string[] = [];
-    await make({
-      tts: {
-        env: { ELEVENLABS_API_KEY: 'test-app-key' },
-        fetch: (async () =>
-          Response.json({
-            voices: [{ voice_id: 'el1', name: 'Ann', labels: { gender: 'female' } }],
-          })) as typeof fetch,
-      },
-      speak: async (_text, _voice, _speed, engine) => {
-        engines.push(engine);
-        return concatWav([{ sampleRate: 8000, samples: new Int16Array(10) }]);
-      },
-    });
-    const status = await app!.inject({ method: 'GET', url: '/api/engines' });
-    expect(status.json<EnginesResponse>().engines[1]?.available).toBe(true);
-    const voices = await app!.inject({ method: 'GET', url: '/api/voices?engine=elevenlabs' });
-    expect(voices.json<{ voices: { id: string }[] }>().voices[0]?.id).toBe('el1');
-    const preview = await app!.inject({
-      method: 'POST',
-      url: '/api/voices/preview',
-      payload: { engine: 'elevenlabs', voice: 'el1' },
-    });
-    expect(preview.statusCode).toBe(200);
-    expect(engines).toEqual(['elevenlabs']);
   });
 
   it('validates settings', async () => {

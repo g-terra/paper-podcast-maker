@@ -5,9 +5,8 @@ import {
   type PodcastSettings,
 } from '@paper-podcast/shared';
 
-// v3: Kokoro voices with speed, and Sonnet 5.5 as the default model. Later fields have
-// schema defaults (e.g. engine), so older saved settings still load.
-const KEY = 'ppm.settings.v3';
+// v4: two fixed host personalities (anchor and explainer) instead of free-text roles.
+const KEY = 'ppm.settings.v4';
 
 /** Settings persisted in localStorage so they survive reloads. */
 export function useLocalSettings() {

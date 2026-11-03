@@ -22,13 +22,36 @@ export const providerModels: Record<AiProviderId, ModelOption[]> = {
   codex: [{ id: '', label: 'Codex default model' }],
 };
 
-/** Text-to-speech engines: Kokoro runs on this machine, ElevenLabs is a cloud service. */
-export const ttsEngineIds = ['kokoro', 'elevenlabs'] as const;
-export const TtsEngineSchema = z.enum(ttsEngineIds);
-export type TtsEngine = z.infer<typeof TtsEngineSchema>;
-
-/** Voices read at this speed by default (1 = normal). */
+/** Kokoro reads at this speed by default (1 = normal). */
 export const DEFAULT_SPEED = 1;
+
+/**
+ * The two host personalities an episode always has: a calm, deep-voiced anchor who frames the
+ * conversation, and an upbeat explainer who walks through the findings.
+ */
+export const hostPersonaIds = ['anchor', 'explainer'] as const;
+export const HostPersonaSchema = z.enum(hostPersonaIds);
+export type HostPersona = z.infer<typeof HostPersonaSchema>;
+
+export const hostPersonas: Record<
+  HostPersona,
+  { label: string; description: string; gender: 'male' | 'female'; defaultVoice: string }
+> = {
+  anchor: {
+    label: 'Calm anchor',
+    description:
+      'Deep-voiced, calm and authoritative. Opens with the hook, asks the framing questions a smart listener would ask, and moves the conversation from one chapter to the next.',
+    gender: 'male',
+    defaultVoice: 'am_michael',
+  },
+  explainer: {
+    label: 'Upbeat explainer',
+    description:
+      'Warm, upbeat and enthusiastic. Explains the findings clearly with everyday examples, reacts with genuine excitement ("That\'s such a wild idea!"), and gives the practical tips.',
+    gender: 'female',
+    defaultVoice: 'af_heart',
+  },
+};
 
 export const HostSchema = z.object({
   /** Display name used in the transcript, e.g. "Alex". */
@@ -38,12 +61,8 @@ export const HostSchema = z.object({
     .min(1, 'Host name is required')
     .max(40)
     .regex(/^[^\n:]+$/, 'Host name cannot contain ":" or line breaks'),
-  /** Free-form role description, e.g. "curious interviewer" or "paper expert". */
-  role: z.string().trim().min(1, 'Host role is required').max(300),
-  /**
-   * Voice id for the chosen engine (Kokoro "af_heart", or an ElevenLabs voice id). Empty means "pick one for me": the
-   * server gives each host a different voice.
-   */
+  persona: HostPersonaSchema,
+  /** Kokoro voice id, e.g. "am_michael". Empty means the persona's default voice. */
   voice: z.string().trim().max(500).default(''),
 });
 export type Host = z.infer<typeof HostSchema>;
@@ -64,19 +83,20 @@ export const PodcastSettingsSchema = z
     /** Target episode length range, in minutes. */
     minMinutes: z.number().positive().max(180),
     maxMinutes: z.number().positive().max(180),
+    /** Always two hosts: the anchor first, then the explainer. */
     hosts: z
       .array(HostSchema)
-      .min(1, 'Add at least one host')
-      .max(4)
-      .refine((hosts) => new Set(hosts.map((h) => h.name.toLowerCase())).size === hosts.length, {
+      .length(2)
+      .refine((h) => h[0]?.persona === 'anchor' && h[1]?.persona === 'explainer', {
+        message: 'The hosts must be one anchor and one explainer',
+      })
+      .refine((h) => h[0]?.name.toLowerCase() !== h[1]?.name.toLowerCase(), {
         message: 'Host names must be unique',
       }),
     audience: AudienceLevelSchema,
     /** Optional free-form tone guidance, e.g. "light and playful". */
     tone: z.string().trim().max(300).default(''),
-    /** Which engine voices the episode. */
-    engine: TtsEngineSchema.default('kokoro'),
-    /** Speaking speed: 0.7 (slow) to 1.3 (fast). ElevenLabs tops out at 1.2. */
+    /** Kokoro speaking speed: 0.7 (slow) to 1.3 (fast). */
     speed: z.number().min(0.7).max(1.3).default(DEFAULT_SPEED),
   })
   .refine((s) => s.minMinutes <= s.maxMinutes, {
@@ -92,11 +112,10 @@ export const defaultSettings: PodcastSettings = {
   minMinutes: 5,
   maxMinutes: 10,
   hosts: [
-    { name: 'Alex', role: 'Curious host who asks the questions a smart listener would', voice: '' },
-    { name: 'Sam', role: 'Researcher who explains the paper clearly and honestly', voice: '' },
+    { name: 'Alex', persona: 'anchor', voice: '' },
+    { name: 'Sam', persona: 'explainer', voice: '' },
   ],
   audience: 'general',
   tone: '',
-  engine: 'kokoro',
   speed: DEFAULT_SPEED,
 };

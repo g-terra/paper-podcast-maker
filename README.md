@@ -9,7 +9,7 @@ paper-podcast-maker is a local tool with a UI that takes an academic paper, uses
 - **Paper in, podcast out**: load a paper (PDF) and get a transcript plus an audio episode.
 - **Local AI**: the transcript is written by a model you already run locally, Codex or Claude, through its CLI.
 - **Configurable length**: set a minimum and maximum talk time for the episode.
-- **Voices**: define the hosts, their voices, and their roles in the conversation.
+- **Hosts**: two fixed personalities, a calm deep-voiced anchor and an upbeat explainer. You pick their names and voices.
 - **More settings**: tone, depth, audience level, and similar options.
 - **Runs locally**: no hosted backend; your papers stay on your machine.
 
@@ -25,8 +25,6 @@ You need Node.js 22+, pnpm (`corepack enable`), and:
    - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude`), signed in.
    - [Codex CLI](https://github.com/openai/codex) (`codex`), signed in.
 2. **Nothing else for voices.** Voices come from **Kokoro**, which runs inside the app: natural-sounding American and British English voices you can preview in the app. The first preview or episode downloads the model once (about 90 MB, into `~/.paper-podcast-maker/models`).
-
-   **Optional: ElevenLabs voices.** Pick "ElevenLabs" as the voice engine in the app to use the voices in your ElevenLabs account instead. ElevenLabs voices the whole conversation in one pass with its dialogue model (`eleven_v3`), so turn-taking and small reactions like [laughs] sound natural. Put your API key in `.env.local` in the project folder (`ELEVENLABS_API_KEY=sk_…`, git ignores it) or set `ELEVENLABS_API_KEY`, then `ppm restart`. This is a cloud service: the script text is sent to ElevenLabs and uses your credits. A key limited to text-to-speech and reading voices is enough.
 
 Then, from the repo folder:
 
@@ -73,7 +71,7 @@ Other devices resolve `.local` names out of the box on macOS, iOS, Windows 10/11
 
 1. The server extracts the paper's text (scanned PDFs without a text layer need OCR first).
 2. It asks the CLI for a JSON script sized to your min/max length (about 130 spoken words per minute, Kokoro's pace), and retries once if the length is off.
-3. Each line is spoken with the host's voice, and the clips are joined into one WAV. Hosts left on "Auto voice" each get a different installed voice.
+3. Each line is spoken with the host's voice, and the clips are joined into one WAV. The anchor defaults to a deep male voice and the explainer to an upbeat female one. Scripts come in titled chapters with a short summary.
 
 The CLI runs with no tools (Claude) or a read-only sandbox in an empty temp folder (Codex), and the server only listens on `127.0.0.1`.
 
@@ -111,7 +109,7 @@ Other scripts, run from the repo root:
 | `pnpm format`    | Prettier.                          |
 | `pnpm check`     | Everything CI runs.                |
 
-Server settings: `PPM_HOST`, `PPM_PORT`, `PPM_DATA_DIR`, `PPM_MODELS_DIR`, `PPM_KOKORO_DTYPE` (default `q8`), `PPM_AI_TIMEOUT_MS` (default 15 minutes), `ELEVENLABS_API_KEY`, `PPM_ELEVENLABS_MODEL` (voice previews, default `eleven_multilingual_v2`), `PPM_ELEVENLABS_DIALOGUE_MODEL` (episodes, default `eleven_v3`). The web dev server reads `PPM_SERVER_URL` to know where to proxy.
+Server settings: `PPM_HOST`, `PPM_PORT`, `PPM_DATA_DIR`, `PPM_MODELS_DIR`, `PPM_KOKORO_DTYPE` (default `q8`), `PPM_AI_TIMEOUT_MS` (default 15 minutes). The web dev server reads `PPM_SERVER_URL` to know where to proxy.
 
 ## License
 

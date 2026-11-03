@@ -26,6 +26,42 @@ describe('parseTranscript', () => {
     expect(out.lines[0]).toEqual({ speaker: 'Alex', text: 'Hi' });
   });
 
+  it('flattens chapters, keeping each title on its first line, and keeps the summary', () => {
+    const out = parseTranscript(
+      JSON.stringify({
+        title: 'Focus',
+        summary: 'Where you aim your attention changes how you learn.',
+        chapters: [
+          {
+            title: 'Why Focus Matters',
+            lines: [
+              { speaker: 'Alex', text: 'Picture this.' },
+              { speaker: 'Sam', text: 'Wild idea.' },
+            ],
+          },
+          { title: 'Three Takeaways', lines: [{ speaker: 'Alex', text: 'First, focus out.' }] },
+        ],
+      }),
+      defaultSettings,
+    );
+    expect(out).toEqual({
+      title: 'Focus',
+      summary: 'Where you aim your attention changes how you learn.',
+      lines: [
+        { speaker: 'Alex', text: 'Picture this.', chapter: 'Why Focus Matters' },
+        { speaker: 'Sam', text: 'Wild idea.' },
+        { speaker: 'Alex', text: 'First, focus out.', chapter: 'Three Takeaways' },
+      ],
+    });
+  });
+
+  it('asks for chapters, a summary and a closing with takeaways', () => {
+    const prompt = buildTranscriptPrompt('paper', defaultSettings);
+    expect(prompt).toContain('"chapters"');
+    expect(prompt).toContain('"summary"');
+    expect(prompt).toMatch(/takeaways/);
+  });
+
   it('rejects unknown speakers', () => {
     expect(() =>
       parseTranscript('{"title":"T","lines":[{"speaker":"Bob","text":"Hi"}]}', defaultSettings),

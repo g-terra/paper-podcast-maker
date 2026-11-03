@@ -1,12 +1,10 @@
 import type {
-  EnginesResponse,
   Episode,
   EpisodesResponse,
   HealthResponse,
   PodcastSettings,
   ProvidersResponse,
   Transcript,
-  TtsEngine,
   VoicePreviewRequest,
   VoicesResponse,
 } from '@paper-podcast/shared';
@@ -23,8 +21,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<HealthResponse>('/api/health'),
   providers: () => request<ProvidersResponse>('/api/providers'),
-  engines: () => request<EnginesResponse>('/api/engines'),
-  voices: (engine: TtsEngine) => request<VoicesResponse>(`/api/voices?engine=${engine}`),
+  voices: () => request<VoicesResponse>('/api/voices'),
   previewVoice: async (body: VoicePreviewRequest): Promise<Blob> => {
     const res = await fetch('/api/voices/preview', {
       method: 'POST',

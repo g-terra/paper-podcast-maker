@@ -18,7 +18,7 @@ describe('speakable', () => {
 });
 
 describe('speakable cues', () => {
-  it('drops ElevenLabs emotion cues so Kokoro does not read them out', () => {
+  it('drops bracketed cues so Kokoro does not read them out', () => {
     expect(speakable('[laughs] Okay, fair. [sighs] Fine.')).toBe('Okay, fair. Fine.');
   });
 });

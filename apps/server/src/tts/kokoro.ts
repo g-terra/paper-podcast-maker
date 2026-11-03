@@ -86,7 +86,7 @@ export function floatTo16(samples: Float32Array): Int16Array {
 export function speakable(text: string): string {
   return (
     text
-      // Emotion cues like "[laughs]" are for ElevenLabs; Kokoro would read them out.
+      // Bracketed cues like "[laughs]" would be read out literally.
       .replace(/\s*\[[^\]]*\]\s*/g, ' ')
       .trim()
       .replace(/\b(?:m+-?hm+|m+ hm+|uh-?huh|uh huh)\b/gi, (m) =>
