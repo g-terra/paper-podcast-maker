@@ -5,13 +5,26 @@ export const aiProviderIds = ['claude', 'codex'] as const;
 export const AiProviderIdSchema = z.enum(aiProviderIds);
 export type AiProviderId = z.infer<typeof AiProviderIdSchema>;
 
+/** Local text-to-speech engines the server can drive. */
+export const ttsEngineIds = ['say', 'espeak-ng', 'piper', 'sapi'] as const;
+export const TtsEngineIdSchema = z.enum(ttsEngineIds);
+export type TtsEngineId = z.infer<typeof TtsEngineIdSchema>;
+
 export const HostSchema = z.object({
   /** Display name used in the transcript, e.g. "Alex". */
-  name: z.string().trim().min(1, 'Host name is required'),
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Host name is required')
+    .max(40)
+    .regex(/^[^\n:]+$/, 'Host name cannot contain ":" or line breaks'),
   /** Free-form role description, e.g. "curious interviewer" or "paper expert". */
-  role: z.string().trim().min(1, 'Host role is required'),
-  /** Voice id understood by the configured TTS engine. */
-  voice: z.string().trim().min(1, 'Voice is required'),
+  role: z.string().trim().min(1, 'Host role is required').max(300),
+  /**
+   * Voice for the configured TTS engine. Empty means "pick one for me": the
+   * server assigns a different installed voice to each host.
+   */
+  voice: z.string().trim().max(500).default(''),
 });
 export type Host = z.infer<typeof HostSchema>;
 
@@ -21,27 +34,45 @@ export type AudienceLevel = z.infer<typeof AudienceLevelSchema>;
 export const PodcastSettingsSchema = z
   .object({
     provider: AiProviderIdSchema,
+    /** Optional model override passed to the CLI (e.g. "sonnet", "gpt-5"). */
+    model: z
+      .string()
+      .trim()
+      .max(100)
+      .regex(/^[\w.:/-]*$/, 'Model name has unexpected characters')
+      .default(''),
     /** Target episode length range, in minutes. */
     minMinutes: z.number().positive().max(180),
     maxMinutes: z.number().positive().max(180),
-    hosts: z.array(HostSchema).min(1, 'Add at least one host').max(4),
+    hosts: z
+      .array(HostSchema)
+      .min(1, 'Add at least one host')
+      .max(4)
+      .refine((hosts) => new Set(hosts.map((h) => h.name.toLowerCase())).size === hosts.length, {
+        message: 'Host names must be unique',
+      }),
     audience: AudienceLevelSchema,
     /** Optional free-form tone guidance, e.g. "light and playful". */
-    tone: z.string().trim().max(200).optional(),
+    tone: z.string().trim().max(300).default(''),
+    ttsEngine: TtsEngineIdSchema,
   })
   .refine((s) => s.minMinutes <= s.maxMinutes, {
     message: 'Minimum length must not exceed maximum length',
     path: ['minMinutes'],
   });
 export type PodcastSettings = z.infer<typeof PodcastSettingsSchema>;
+export type PodcastSettingsInput = z.input<typeof PodcastSettingsSchema>;
 
 export const defaultSettings: PodcastSettings = {
   provider: 'claude',
-  minMinutes: 8,
-  maxMinutes: 15,
+  model: '',
+  minMinutes: 5,
+  maxMinutes: 10,
   hosts: [
-    { name: 'Alex', role: 'Curious host who asks the questions', voice: 'default-1' },
-    { name: 'Sam', role: 'Expert who explains the paper', voice: 'default-2' },
+    { name: 'Alex', role: 'Curious host who asks the questions a smart listener would', voice: '' },
+    { name: 'Sam', role: 'Researcher who explains the paper clearly and honestly', voice: '' },
   ],
   audience: 'general',
+  tone: '',
+  ttsEngine: 'say',
 };
