@@ -73,7 +73,13 @@ export async function kokoroSynthesize(
   // stream() splits into sentences, which keeps each chunk under the model's token limit.
   // Voice ids come from kokoroVoices(); the type is a fixed union of them.
   const options = { voice: (voice || 'af_heart') as 'af_heart' };
-  for await (const { audio } of tts.stream(text, options)) {
+  // Pass a closed splitter: given a plain string, kokoro-js 1.2 never closes its own splitter,
+  // so the stream waits for more text forever after the last sentence.
+  const { TextSplitterStream } = await import('kokoro-js');
+  const splitter = new TextSplitterStream();
+  splitter.push(text);
+  splitter.close();
+  for await (const { audio } of tts.stream(splitter, options)) {
     chunks.push(audio.audio);
     sampleRate = audio.sampling_rate;
   }
