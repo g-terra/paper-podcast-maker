@@ -79,6 +79,18 @@ export function floatTo16(samples: Float32Array): Int16Array {
   return out;
 }
 
+/**
+ * Rewrites sounds the phonemizer can't say: it spells "Mm-hmm" as "em em hum", "Mhm" as letters
+ * and reads "Uh-huh" as "uh-uh" (a no), so they become words that sound right.
+ */
+export function speakable(text: string): string {
+  return text
+    .replace(/\b(?:m+-?hm+|m+ hm+|uh-?huh|uh huh)\b/gi, (m) =>
+      m[0] === m[0]?.toUpperCase() ? 'Yeah' : 'yeah',
+    )
+    .replace(/\b(?:hm+|m{2,})\b/gi, (m) => (m[0] === m[0]?.toUpperCase() ? 'Hmm' : 'hmm'));
+}
+
 /** Speaks `text` and returns a 16-bit mono WAV. */
 export async function kokoroWav(
   modelsDir: string,
@@ -96,7 +108,7 @@ export async function kokoroWav(
   // so the stream waits for more text forever after the last sentence.
   const { TextSplitterStream } = await import('kokoro-js');
   const splitter = new TextSplitterStream();
-  splitter.push(text);
+  splitter.push(speakable(text));
   splitter.close();
   for await (const { audio } of tts.stream(splitter, options)) {
     chunks.push(audio.audio);

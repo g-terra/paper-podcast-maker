@@ -58,12 +58,13 @@ The spoken script must be between ${min} and ${max} words in total (aim for abou
 - Use contractions and spoken phrasing ("it's", "you know", "so basically", "wait, really?"). Start some turns with "So", "Okay", "Right", "Yeah, and".
 - Hosts react to each other: quick reactions ("Huh.", "No way.", "Exactly."), follow-up questions, light humour, and the odd self-correction ("it's about, well, more like a third").
 - Sometimes a host cuts in before the other finishes: end the interrupted turn with an em dash (—) mid-thought and let the next host pick it up.
-- Add short backchannels the listener hears under the other host's speech: a separate line of one to three words ("Mm-hmm.", "Right.", "Oh, interesting.") with "overlap": true. Use them a few times per episode, never two in a row, and always from a different host than the line before.
+- Add short backchannels the listener hears under the other host's speech: a separate line of one to three real words ("Right.", "Yeah.", "I see.", "Oh, interesting.") with "overlap": true. Use them a few times per episode, never two in a row, and always from a different host than the line before.
+- The voices read text literally, so never write sounds that aren't words ("Mm-hmm", "Mhm", "Uh-huh", "Hmm", "Mm"): use real words instead.
 - Don't overdo fillers ("um", "uh"): at most a few in the whole episode.
 ${feedback ? `\n## Feedback on the previous draft\n${feedback}\n` : ''}
 ## Output format
 Reply with only a JSON object, no commentary and no code fences:
-{"title": "<episode title>", "lines": [{"speaker": <one of ${names}>, "text": "<what they say>"}, {"speaker": <one of ${names}>, "text": "Mm-hmm.", "overlap": true}]}
+{"title": "<episode title>", "lines": [{"speaker": <one of ${names}>, "text": "<what they say>"}, {"speaker": <one of ${names}>, "text": "Right.", "overlap": true}]}
 
 ## The paper
 <paper>
