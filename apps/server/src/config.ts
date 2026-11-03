@@ -8,8 +8,6 @@ export interface ServerConfig {
   dataDir: string;
   /** Cache for downloaded TTS models (Kokoro). */
   modelsDir: string;
-  /** Folder scanned for Piper `.onnx` voice models. */
-  piperVoicesDir: string;
   /** Upper bound for one AI CLI run, in milliseconds. */
   aiTimeoutMs: number;
   /** Advertise the app on the local network as `<mdnsName>.local` (and listen beyond loopback). */
@@ -29,7 +27,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     port: Number(env.PPM_PORT ?? 8787),
     dataDir,
     modelsDir: resolve(env.PPM_MODELS_DIR ?? join(dataDir, 'models')),
-    piperVoicesDir: resolve(env.PPM_PIPER_VOICES_DIR ?? join(dataDir, 'piper-voices')),
     aiTimeoutMs: Number(env.PPM_AI_TIMEOUT_MS ?? 15 * 60 * 1000),
     mdns,
     mdnsName: env.PPM_MDNS_NAME ?? 'paper-podcast',

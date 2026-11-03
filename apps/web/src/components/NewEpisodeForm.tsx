@@ -1,39 +1,47 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   PodcastSettingsSchema,
   type Episode,
   type PodcastSettings,
   type ProviderStatus,
-  type TtsEngineStatus,
+  type Voice,
 } from '@paper-podcast/shared';
 import { api } from '../lib/api';
 import { useLocalSettings } from '../lib/useLocalSettings';
-import { Card, Field, buttonClass, inputClass, secondaryButtonClass } from './ui';
+import { useVoicePreview } from '../lib/useVoicePreview';
+import { Card, Segmented, Slider, buttonClass, inputClass, secondaryButtonClass } from './ui';
 
 interface Props {
   providers: ProviderStatus[];
-  engines: TtsEngineStatus[];
+  voices: Voice[];
+  modelReady: boolean;
   onCreated: (episode: Episode) => void;
 }
 
-export function NewEpisodeForm({ providers, engines, onCreated }: Props) {
+const MAX_MINUTES = 60;
+
+export function NewEpisodeForm({ providers, voices, modelReady, onCreated }: Props) {
   const [settings, setSettings] = useLocalSettings();
   const [paper, setPaper] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const preview = useVoicePreview();
 
-  // If the saved choice isn't installed here, fall back to one that is.
-  const providerId = providers.find((p) => p.id === settings.provider)?.available
-    ? settings.provider
-    : (providers.find((p) => p.available)?.id ?? settings.provider);
-  const engineId = engines.find((e) => e.id === settings.ttsEngine)?.available
-    ? settings.ttsEngine
-    : (engines.find((e) => e.available)?.id ?? settings.ttsEngine);
-  const effective: PodcastSettings = { ...settings, provider: providerId, ttsEngine: engineId };
-
+  // Only offer script writers found on this machine; fall back if the saved one is missing.
+  const available = providers.filter((p) => p.available);
+  const provider = available.find((p) => p.id === settings.provider) ?? available[0];
+  const models = provider?.models ?? [];
+  const model = models.some((m) => m.id === settings.model)
+    ? settings.model
+    : (models[0]?.id ?? '');
+  const effective: PodcastSettings = {
+    ...settings,
+    provider: provider?.id ?? settings.provider,
+    model,
+  };
   const validation = PodcastSettingsSchema.safeParse(effective);
-  const provider = providers.find((p) => p.id === providerId);
-  const engine = engines.find((e) => e.id === engineId);
 
   const update = <K extends keyof PodcastSettings>(key: K, value: PodcastSettings[K]) =>
     setSettings((s) => ({ ...s, [key]: value }));
@@ -44,13 +52,22 @@ export function NewEpisodeForm({ providers, engines, onCreated }: Props) {
     );
 
   const problems = [
-    ...(validation.success ? [] : validation.error.issues.map((i) => i.message)),
-    ...(provider && !provider.available
-      ? [`${provider.label} was not found on this machine.`]
+    ...(available.length === 0
+      ? ['No script writer found. Install the Claude Code or Codex CLI, then reload.']
       : []),
-    ...(engine && !engine.available ? [`${engine.label} is not available on this machine.`] : []),
+    ...(validation.success ? [] : validation.error.issues.map((i) => i.message)),
   ];
   const canSubmit = paper && problems.length === 0 && !submitting;
+
+  function choosePaper(file: File | undefined) {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      setError('Please choose a PDF file.');
+      return;
+    }
+    setError(null);
+    setPaper(file);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,109 +84,163 @@ export function NewEpisodeForm({ providers, engines, onCreated }: Props) {
     }
   }
 
+  const voiceGroups = (['American', 'British'] as const).flatMap((accent) =>
+    (['female', 'male'] as const).map((gender) => ({
+      label: `${accent} ${gender}`,
+      voices: voices.filter((v) => v.accent === accent && v.gender === gender),
+    })),
+  );
+
   return (
     <Card title="New episode">
-      <form className="space-y-6" onSubmit={submit}>
-        <Field label="Paper (PDF)">
+      <form className="space-y-7" onSubmit={submit}>
+        {/* Paper */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => fileInput.current?.click()}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && fileInput.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            choosePaper(e.dataTransfer.files[0]);
+          }}
+          className={`cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition ${
+            dragging
+              ? 'border-indigo-500 bg-indigo-50'
+              : paper
+                ? 'border-emerald-300 bg-emerald-50'
+                : 'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'
+          }`}
+        >
           <input
+            ref={fileInput}
             type="file"
             accept="application/pdf,.pdf"
-            className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-indigo-700"
-            onChange={(e) => setPaper(e.target.files?.[0] ?? null)}
+            className="hidden"
+            onChange={(e) => choosePaper(e.target.files?.[0])}
           />
-        </Field>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Script writer">
-            <select
-              className={inputClass}
-              value={providerId}
-              onChange={(e) => update('provider', e.target.value as PodcastSettings['provider'])}
-            >
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                  {p.available ? '' : ' (not found)'}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Model (optional)" hint="Leave empty to use the CLI's default model.">
-            <input
-              className={inputClass}
-              value={settings.model}
-              placeholder={providerId === 'claude' ? 'e.g. sonnet' : 'e.g. gpt-5'}
-              onChange={(e) => update('model', e.target.value)}
-            />
-          </Field>
+          {paper ? (
+            <p className="text-sm">
+              <span className="font-medium text-emerald-800">{paper.name}</span>
+              <span className="block text-xs text-slate-500">
+                Click to choose a different paper
+              </span>
+            </p>
+          ) : (
+            <p className="text-sm text-slate-600">
+              <span className="font-medium text-indigo-700">Drop a paper here</span> or click to
+              choose a PDF
+            </p>
+          )}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Min length (minutes)">
-            <input
-              type="number"
-              min={1}
-              className={inputClass}
-              value={settings.minMinutes}
-              onChange={(e) => update('minMinutes', Number(e.target.value))}
-            />
-          </Field>
-          <Field label="Max length (minutes)">
-            <input
-              type="number"
-              min={1}
-              className={inputClass}
-              value={settings.maxMinutes}
-              onChange={(e) => update('maxMinutes', Number(e.target.value))}
-            />
-          </Field>
-        </div>
+        {/* Script writer */}
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Script writer
+          </h3>
+          {available.length > 0 && provider && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Segmented
+                label="Script writer"
+                value={provider.id}
+                options={available.map((p) => ({ value: p.id, label: p.label }))}
+                onChange={(id) => {
+                  const next = available.find((p) => p.id === id);
+                  setSettings((s) => ({ ...s, provider: id, model: next?.models[0]?.id ?? '' }));
+                }}
+              />
+              <select
+                aria-label="Model"
+                className={`${inputClass} w-auto`}
+                value={model}
+                onChange={(e) => update('model', e.target.value)}
+              >
+                {models.map((m) => (
+                  <option key={m.id || 'default'} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {providers
+            .filter((p) => !p.available)
+            .map((p) => (
+              <p key={p.id} className="text-xs text-slate-500">
+                {p.label} isn't installed (<code>{p.command}</code> not found).
+              </p>
+            ))}
+        </section>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Audience">
-            <select
-              className={inputClass}
-              value={settings.audience}
-              onChange={(e) => update('audience', e.target.value as PodcastSettings['audience'])}
-            >
-              <option value="general">General public</option>
-              <option value="student">Students</option>
-              <option value="expert">Experts</option>
-            </select>
-          </Field>
-          <Field label="Tone (optional)">
+        {/* Episode */}
+        <section className="space-y-4">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Episode</h3>
+          <Slider
+            label="Shortest"
+            value={settings.minMinutes}
+            min={1}
+            max={MAX_MINUTES}
+            display={`${settings.minMinutes} min`}
+            onChange={(v) =>
+              setSettings((s) => ({ ...s, minMinutes: v, maxMinutes: Math.max(v, s.maxMinutes) }))
+            }
+          />
+          <Slider
+            label="Longest"
+            value={settings.maxMinutes}
+            min={1}
+            max={MAX_MINUTES}
+            display={`${settings.maxMinutes} min`}
+            onChange={(v) =>
+              setSettings((s) => ({ ...s, maxMinutes: v, minMinutes: Math.min(v, s.minMinutes) }))
+            }
+          />
+          <Slider
+            label="Speaking speed"
+            value={settings.speed}
+            min={0.7}
+            max={1.3}
+            step={0.05}
+            display={`${settings.speed.toFixed(2)}×`}
+            onChange={(v) => update('speed', v)}
+          />
+          <div className="space-y-1">
+            <span className="text-sm font-medium">Audience</span>
+            <div>
+              <Segmented
+                label="Audience"
+                value={settings.audience}
+                options={[
+                  { value: 'general', label: 'Everyone' },
+                  { value: 'student', label: 'Students' },
+                  { value: 'expert', label: 'Experts' },
+                ]}
+                onChange={(v) => update('audience', v)}
+              />
+            </div>
+          </div>
+          <label className="block space-y-1">
+            <span className="text-sm font-medium">Tone (optional)</span>
             <input
               className={inputClass}
               value={settings.tone}
               placeholder="e.g. light and playful, or calm and precise"
               onChange={(e) => update('tone', e.target.value)}
             />
-          </Field>
-        </div>
+          </label>
+        </section>
 
-        <Field
-          label="Voice engine"
-          hint={
-            engine && (!engine.available || engine.voices.length === 0) ? engine.hint : undefined
-          }
-        >
-          <select
-            className={inputClass}
-            value={engineId}
-            onChange={(e) => update('ttsEngine', e.target.value as PodcastSettings['ttsEngine'])}
-          >
-            {engines.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.label}
-                {e.available ? ` (${e.voices.length} voices)` : ' (not available)'}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <fieldset className="space-y-3">
+        {/* Hosts */}
+        <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <legend className="text-sm font-medium">Hosts</legend>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Hosts</h3>
             <button
               type="button"
               className={secondaryButtonClass}
@@ -181,61 +252,99 @@ export function NewEpisodeForm({ providers, engines, onCreated }: Props) {
                 ])
               }
             >
-              Add host
+              + Add host
             </button>
           </div>
-          {settings.hosts.map((host, i) => (
-            <div key={i} className="space-y-2 rounded-lg border border-slate-200 p-3">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  aria-label={`Host ${i + 1} name`}
-                  placeholder="Name"
-                  className={inputClass}
-                  value={host.name}
-                  onChange={(e) => updateHost(i, { name: e.target.value })}
-                />
-                <select
-                  aria-label={`Host ${i + 1} voice`}
-                  className={inputClass}
-                  value={host.voice}
-                  onChange={(e) => updateHost(i, { voice: e.target.value })}
-                >
-                  <option value="">Auto voice</option>
-                  {host.voice && !engine?.voices.includes(host.voice) && (
-                    <option value={host.voice}>{host.voice} (not installed)</option>
-                  )}
-                  {engine?.voices.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
+          {!modelReady && (
+            <p className="text-xs text-slate-500">
+              The first voice preview downloads the Kokoro voice model (about 90 MB, once), so it
+              can take half a minute.
+            </p>
+          )}
+          {settings.hosts.map((host, i) => {
+            const key = `host-${i}`;
+            const sample = `Hi, I'm ${host.name || 'your host'}. Welcome to the show!`;
+            // "Auto" previews the voice the server would pick: the i-th unused preferred voice.
+            const autoVoice =
+              voices.filter((v) => !settings.hosts.some((h) => h.voice === v.id))[
+                settings.hosts.slice(0, i).filter((h) => !h.voice).length
+              ]?.id ?? voices[0]?.id;
+            const voiceId = host.voice || autoVoice || '';
+            const busy = preview.loading === key;
+            const isPlaying = preview.playing === key;
+            return (
+              <div key={i} className="space-y-2 rounded-xl border border-slate-200 p-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input
+                    aria-label={`Host ${i + 1} name`}
+                    placeholder="Name"
+                    className={inputClass}
+                    value={host.name}
+                    onChange={(e) => updateHost(i, { name: e.target.value })}
+                  />
+                  <div className="flex gap-2">
+                    <select
+                      aria-label={`Host ${i + 1} voice`}
+                      className={inputClass}
+                      value={host.voice}
+                      onChange={(e) => updateHost(i, { voice: e.target.value })}
+                    >
+                      <option value="">
+                        Auto ({voices.find((v) => v.id === autoVoice)?.name ?? 'any'})
+                      </option>
+                      {voiceGroups.map((g) => (
+                        <optgroup key={g.label} label={g.label}>
+                          {g.voices.map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      aria-label={isPlaying ? 'Stop preview' : `Preview ${host.name}'s voice`}
+                      title={isPlaying ? 'Stop' : 'Hear this voice'}
+                      disabled={!voiceId || busy}
+                      onClick={() =>
+                        isPlaying
+                          ? preview.stop()
+                          : preview.play(key, voiceId, sample, settings.speed)
+                      }
+                      className="shrink-0 rounded-md bg-indigo-50 px-3 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                    >
+                      {busy ? '…' : isPlaying ? '■' : '▶'}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    aria-label={`Host ${i + 1} role`}
+                    placeholder="Role in the conversation"
+                    className={inputClass}
+                    value={host.role}
+                    onChange={(e) => updateHost(i, { role: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className={secondaryButtonClass}
+                    disabled={settings.hosts.length <= 1}
+                    onClick={() =>
+                      update(
+                        'hosts',
+                        settings.hosts.filter((_, j) => j !== i),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <input
-                  aria-label={`Host ${i + 1} role`}
-                  placeholder="Role in the conversation"
-                  className={inputClass}
-                  value={host.role}
-                  onChange={(e) => updateHost(i, { role: e.target.value })}
-                />
-                <button
-                  type="button"
-                  className={secondaryButtonClass}
-                  disabled={settings.hosts.length <= 1}
-                  onClick={() =>
-                    update(
-                      'hosts',
-                      settings.hosts.filter((_, j) => j !== i),
-                    )
-                  }
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-          ))}
-        </fieldset>
+            );
+          })}
+          {preview.error && <p className="text-sm text-red-700">Preview failed: {preview.error}</p>}
+        </section>
 
         {problems.length > 0 && (
           <ul className="list-disc space-y-1 pl-5 text-sm text-red-700">
@@ -246,7 +355,7 @@ export function NewEpisodeForm({ providers, engines, onCreated }: Props) {
         )}
         {error && <p className="text-sm text-red-700">{error}</p>}
 
-        <button type="submit" disabled={!canSubmit} className={buttonClass}>
+        <button type="submit" disabled={!canSubmit} className={`${buttonClass} w-full py-3`}>
           {submitting ? 'Uploading…' : paper ? 'Make the podcast' : 'Choose a paper first'}
         </button>
       </form>

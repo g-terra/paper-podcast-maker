@@ -46,3 +46,80 @@ export function Card({
     </section>
   );
 }
+
+/** A row of toggle buttons for picking one option. */
+export function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: T;
+  options: { value: T; label: string; disabled?: boolean; title?: string }[];
+  onChange: (value: T) => void;
+  label: string;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="inline-flex flex-wrap rounded-lg bg-slate-100 p-1"
+    >
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          disabled={o.disabled}
+          title={o.title}
+          onClick={() => onChange(o.value)}
+          className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+            value === o.value
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 disabled:opacity-40'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A labelled range slider with the current value shown on the right. */
+export function Slider({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  display,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  display: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="flex items-baseline justify-between text-sm">
+        <span className="font-medium">{label}</span>
+        <span className="tabular-nums text-indigo-700">{display}</span>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-indigo-600"
+      />
+    </label>
+  );
+}

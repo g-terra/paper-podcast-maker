@@ -15,9 +15,23 @@ export class CommandError extends Error {
   constructor(
     message: string,
     readonly stderr: string,
+    readonly stdout = '',
   ) {
     super(message);
   }
+}
+
+/** Set by a parent Claude Code session; they make a nested `claude` act as a child session. */
+const SESSION_VARS = new Set([
+  'CLAUDECODE',
+  'CLAUDE_CODE_ENTRYPOINT',
+  'CLAUDE_CODE_SSE_PORT',
+  'CLAUDE_CODE_EXECPATH',
+]);
+
+/** The environment for CLIs we start, as if run from a normal terminal. */
+export function cleanEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !SESSION_VARS.has(key)));
 }
 
 /**
@@ -35,6 +49,7 @@ export function runCommand(
     const needsShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(command);
     const child = spawn(needsShell ? `"${command}"` : command, args, {
       cwd: options.cwd,
+      env: cleanEnv(process.env),
       shell: needsShell,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
@@ -62,7 +77,7 @@ export function runCommand(
       if (code === 0) resolvePromise({ stdout, stderr });
       else {
         const tail = (stderr.trim() || stdout.trim()).split('\n').slice(-5).join('\n');
-        reject(new CommandError(`${command} exited with code ${code}: ${tail}`, stderr));
+        reject(new CommandError(`${command} exited with code ${code}: ${tail}`, stderr, stdout));
       }
     });
 

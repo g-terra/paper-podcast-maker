@@ -9,11 +9,18 @@ import {
   type EpisodesResponse,
   type HealthResponse,
   type ProvidersResponse,
-  type TtsEnginesResponse,
+  type VoicePreviewRequest,
+  type VoicesResponse,
 } from '@paper-podcast/shared';
 import type { ServerConfig } from './config.js';
-import { defaultLocator, detectProviders, type CommandLocator } from './providers/index.js';
-import { detectTtsEngines } from './tts/index.js';
+import {
+  defaultLocator,
+  detectProviders,
+  type CommandLocator,
+  type ModelLister,
+} from './providers/index.js';
+import { listVoices } from './tts/index.js';
+import { kokoroModelReady, kokoroWav } from './tts/kokoro.js';
 import { EpisodeService, type PipelineDeps } from './pipeline/episodes.js';
 
 export interface BuildAppOptions {
@@ -21,6 +28,10 @@ export interface BuildAppOptions {
   logger?: boolean;
   /** Override CLI detection (used in tests). */
   locateCommand?: CommandLocator;
+  /** Override model listing (used in tests). */
+  listModels?: ModelLister;
+  /** Override speech for voice previews (used in tests). */
+  speak?: (text: string, voice: string, speed: number) => Promise<Buffer>;
   /** Override pipeline steps (used in tests). */
   pipeline?: Partial<PipelineDeps>;
   /** Built web app to serve at `/`, if present. */
@@ -34,7 +45,12 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const { config } = options;
   const app = Fastify({ logger: options.logger ?? false });
   const locateCommand = options.locateCommand ?? defaultLocator;
-  const tts = { piperVoicesDir: config.piperVoicesDir, modelsDir: config.modelsDir };
+  const tts = { modelsDir: config.modelsDir };
+  const speak =
+    options.speak ??
+    ((text: string, voice: string, speed: number) =>
+      kokoroWav(config.modelsDir, text, voice, speed));
+  const previews = new Map<string, Buffer>();
 
   const episodes = new EpisodeService({
     dataDir: config.dataDir,
@@ -53,12 +69,32 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   }));
 
   app.get('/api/providers', async (): Promise<ProvidersResponse> => ({
-    providers: await detectProviders(locateCommand),
+    providers: await detectProviders(locateCommand, options.listModels),
   }));
 
-  app.get('/api/tts', async (): Promise<TtsEnginesResponse> => ({
-    engines: await detectTtsEngines(tts),
+  app.get('/api/voices', async (): Promise<VoicesResponse> => ({
+    voices: await listVoices(),
+    modelReady: await kokoroModelReady(config.modelsDir),
   }));
+
+  // Speaks a short sample so the user can hear a voice before choosing it.
+  app.post<{ Body: VoicePreviewRequest }>('/api/voices/preview', async (request, reply) => {
+    const { voice, text, speed } = request.body ?? ({} as VoicePreviewRequest);
+    const known = (await listVoices()).some((v) => v.id === voice);
+    if (!known) return reply.code(400).send({ error: 'Unknown voice' });
+    const sample =
+      (text ?? '').trim().slice(0, 300) ||
+      'Hi! Welcome to the show. Today we are reading a new paper together.';
+    const rate = Math.min(1.3, Math.max(0.7, Number(speed) || 1));
+    const key = `${voice}|${rate}|${sample}`;
+    let wav = previews.get(key);
+    if (!wav) {
+      wav = await speak(sample, voice, rate);
+      if (previews.size > 50) previews.delete(previews.keys().next().value!);
+      previews.set(key, wav);
+    }
+    return reply.header('Content-Type', 'audio/wav').send(wav);
+  });
 
   app.post('/api/settings/validate', async (request, reply) => {
     const result = PodcastSettingsSchema.safeParse(request.body);

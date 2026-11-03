@@ -5,8 +5,8 @@ import {
   type PodcastSettings,
 } from '@paper-podcast/shared';
 
-// v2: Kokoro became the default voice engine.
-const KEY = 'ppm.settings.v2';
+// v3: Kokoro-only voices with speed, and Sonnet 5.5 as the default model.
+const KEY = 'ppm.settings.v3';
 
 /** Settings persisted in localStorage so they survive reloads. */
 export function useLocalSettings() {
