@@ -11,8 +11,9 @@ import {
 } from '@paper-podcast/shared';
 import { extractPdfText } from '../pdf.js';
 import { getProvider, type CommandLocator } from '../providers/index.js';
-import { assignVoices, type TtsContext } from '../tts/index.js';
-import { kokoroModelReady, kokoroVoices, kokoroWav } from '../tts/kokoro.js';
+import { assignVoices, engineVoices, speakLine, type TtsContext } from '../tts/index.js';
+import { kokoroModelReady } from '../tts/kokoro.js';
+import { elevenLabsDialogueWav } from '../tts/elevenlabs.js';
 import { readWav } from '../audio/wav.js';
 import { mixConversation, type MixLine } from '../audio/mix.js';
 import { buildTranscriptPrompt, parseTranscript, wordTargets } from './prompt.js';
@@ -238,37 +239,60 @@ export class EpisodeService {
     settings: PodcastSettings,
     dir: string,
   ) {
-    const installed = await kokoroVoices();
+    const engine = settings.engine;
+    const installed = (await engineVoices(this.deps.tts, engine)).map((v) => v.id);
     // "Auto" uses the persona's voice: a deep male voice for the anchor, an upbeat female one
-    // for the explainer.
+    // for the explainer. A voice from the other engine also falls back to it.
     const voices = assignVoices(
-      settings.hosts.map((h) =>
-        installed.includes(h.voice)
-          ? h.voice
-          : installed.includes(hostPersonas[h.persona].defaultVoice)
-            ? hostPersonas[h.persona].defaultVoice
-            : '',
-      ),
+      settings.hosts.map((h) => {
+        const fallback = hostPersonas[h.persona].defaultVoices[engine];
+        if (installed.includes(h.voice)) return h.voice;
+        return installed.includes(fallback) ? fallback : '';
+      }),
       installed,
+      [],
     );
     const voiceFor = new Map(settings.hosts.map((h, i) => [h.name, voices[i] ?? '']));
-    if (!(await kokoroModelReady(this.deps.tts.modelsDir))) {
+    if (engine === 'kokoro' && !(await kokoroModelReady(this.deps.tts.modelsDir))) {
       await this.update(episode, {
         detail: 'Downloading the Kokoro voice model (once, about 90 MB)',
       });
     }
 
     const { lines } = transcript;
+    if (engine === 'elevenlabs') {
+      // ElevenLabs voices the whole conversation at once, with its own turn-taking.
+      const wav = await elevenLabsDialogueWav(
+        this.deps.tts,
+        lines.map((l) => ({ text: l.text, voice: voiceFor.get(l.speaker) ?? '' })),
+        {
+          seed: hashSeed(episode.id),
+          onProgress: (done, total) =>
+            this.update(episode, {
+              detail:
+                total > 1
+                  ? `Voicing the conversation with ElevenLabs (part ${done + 1} of ${total})`
+                  : 'Voicing the conversation with ElevenLabs',
+            }),
+        },
+      );
+      await writeFile(join(dir, AUDIO_FILE), wav);
+      return;
+    }
+
     const clips: MixLine[] = [];
     for (const [i, line] of lines.entries()) {
       await this.update(episode, {
         detail: `Voicing line ${i + 1} of ${lines.length}`,
       });
-      const wav = await kokoroWav(
-        this.deps.tts.modelsDir,
+      const wav = await speakLine(
+        this.deps.tts,
+        engine,
         line.text,
         voiceFor.get(line.speaker) ?? '',
-        settings.speed,
+        {
+          speed: settings.speed,
+        },
       );
       clips.push({
         pcm: readWav(wav),

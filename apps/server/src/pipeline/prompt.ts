@@ -74,8 +74,11 @@ Stay faithful to the paper. Do not invent results, numbers, quotes or anecdotes;
 - Sometimes a host cuts in before the other finishes: end the interrupted turn mid-thought with an em dash (—) and let the other host pick it up.
 - Write only real words. Never write sounds like "Mm-hmm", "Mhm", "Uh-huh", "Hmm", "um" or "uh", because the voices read text literally.
 - No markdown, URLs, or stage directions. Spell out symbols and read equations in words.
-- Do not use square-bracket cues or sound effects.
-## Style example (a different paper; match the feel, not the content)
+${
+  settings.engine === 'elevenlabs'
+    ? '- The voices understand a few emotion cues in square brackets, placed inline before the words they affect: [laughs], [chuckles], [sighs], [excited], [curious], [thoughtful]. Use one every several turns at most, only where a real person would react that way.\n'
+    : '- Do not use square-bracket cues or sound effects.\n'
+}## Style example (a different paper; match the feel, not the content)
 A: Picture this: you're practicing a new golf swing or trying to perfect your balance, and a tiny change in what you focus on could make all the difference. That's what today's episode is all about.
 B: That's such a wild idea, especially since most people think the key is just more practice. We're looking at fifteen years of research showing that what you focus on actually shifts how well and how fast you learn.
 A: Let's jump right in with the classic question. Should you focus on your moving arm, or on the ball you're throwing?

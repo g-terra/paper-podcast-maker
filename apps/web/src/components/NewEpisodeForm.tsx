@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   PodcastSettingsSchema,
   hostPersonas,
   type Episode,
   type PodcastSettings,
   type ProviderStatus,
+  type TtsEngine,
+  type TtsEngineStatus,
   type Voice,
 } from '@paper-podcast/shared';
 import { api } from '../lib/api';
@@ -14,14 +16,38 @@ import { Card, Segmented, Slider, buttonClass, inputClass } from './ui';
 
 interface Props {
   providers: ProviderStatus[];
-  voices: Voice[];
-  modelReady: boolean;
+  engines: TtsEngineStatus[];
   onCreated: (episode: Episode) => void;
 }
 
 const MAX_MINUTES = 60;
 
-export function NewEpisodeForm({ providers, voices, modelReady, onCreated }: Props) {
+/** Voices for one engine, reloaded when the engine changes. */
+function useVoices(engine: TtsEngine, enabled: boolean) {
+  const [state, setState] = useState<{
+    engine?: TtsEngine;
+    voices: Voice[];
+    modelReady: boolean;
+    error?: string;
+  }>({ voices: [], modelReady: true });
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    api
+      .voices(engine)
+      .then((r) => live && setState({ engine, voices: r.voices, modelReady: r.modelReady }))
+      .catch(
+        (err: Error) =>
+          live && setState({ engine, voices: [], modelReady: true, error: err.message }),
+      );
+    return () => {
+      live = false;
+    };
+  }, [engine, enabled]);
+  return state.engine === engine ? state : { voices: [], modelReady: true, loading: true };
+}
+
+export function NewEpisodeForm({ providers, engines, onCreated }: Props) {
   const [settings, setSettings] = useLocalSettings();
   const [paper, setPaper] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -44,6 +70,12 @@ export function NewEpisodeForm({ providers, voices, modelReady, onCreated }: Pro
   };
   const validation = PodcastSettingsSchema.safeParse(effective);
 
+  const engine = engines.find((e) => e.id === settings.engine) ?? engines[0];
+  const engineId: TtsEngine = engine?.id ?? 'kokoro';
+  const voiceState = useVoices(engineId, Boolean(engine?.available));
+  const { voices, modelReady } = voiceState;
+  const voiceError = 'error' in voiceState ? voiceState.error : undefined;
+
   const update = <K extends keyof PodcastSettings>(key: K, value: PodcastSettings[K]) =>
     setSettings((s) => ({ ...s, [key]: value }));
   const updateHost = (i: number, patch: Partial<PodcastSettings['hosts'][number]>) =>
@@ -56,6 +88,10 @@ export function NewEpisodeForm({ providers, voices, modelReady, onCreated }: Pro
     ...(available.length === 0
       ? ['No script writer found. Install the Claude Code or Codex CLI, then reload.']
       : []),
+    ...(engine && !engine.available
+      ? [`${engine.label}: ${engine.detail ?? 'not available'}`]
+      : []),
+    ...(voiceError ? [voiceError] : []),
     ...(validation.success ? [] : validation.error.issues.map((i) => i.message)),
   ];
   const canSubmit = paper && problems.length === 0 && !submitting;
@@ -196,15 +232,21 @@ export function NewEpisodeForm({ providers, voices, modelReady, onCreated }: Pro
               setSettings((s) => ({ ...s, maxMinutes: v, minMinutes: Math.min(v, s.minMinutes) }))
             }
           />
-          <Slider
-            label="Speaking speed"
-            value={settings.speed}
-            min={0.7}
-            max={1.3}
-            step={0.05}
-            display={`${settings.speed.toFixed(2)}×`}
-            onChange={(v) => update('speed', v)}
-          />
+          {engineId === 'kokoro' ? (
+            <Slider
+              label="Speaking speed"
+              value={settings.speed}
+              min={0.7}
+              max={1.3}
+              step={0.05}
+              display={`${settings.speed.toFixed(2)}×`}
+              onChange={(v) => update('speed', v)}
+            />
+          ) : (
+            <p className="text-xs text-slate-500">
+              ElevenLabs voices the whole conversation in one go and sets its own pace.
+            </p>
+          )}
           <div className="space-y-1">
             <span className="text-sm font-medium">Audience</span>
             <div>
@@ -234,7 +276,33 @@ export function NewEpisodeForm({ providers, voices, modelReady, onCreated }: Pro
         {/* Hosts */}
         <section className="space-y-3">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Hosts</h3>
-          {!modelReady && (
+          <div className="flex flex-wrap items-center gap-3">
+            <Segmented
+              label="Voice engine"
+              value={engineId}
+              options={engines.map((e) => ({ value: e.id, label: e.label }))}
+              onChange={(id) =>
+                // Voice ids differ per engine, so hosts go back to "Auto".
+                setSettings((s) => ({
+                  ...s,
+                  engine: id,
+                  hosts: s.hosts.map((h) => ({ ...h, voice: '' })),
+                }))
+              }
+            />
+            <span className="text-xs text-slate-500">
+              {engine?.cloud
+                ? 'Cloud voices: the script is sent to ElevenLabs and uses your credits.'
+                : 'Runs on this machine.'}
+            </span>
+          </div>
+          {engine && !engine.available && (
+            <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">
+              {engine.label} needs an API key. Add <code>ELEVENLABS_API_KEY=…</code> to{' '}
+              <code>.env.local</code> in the project folder, then run <code>ppm restart</code>.
+            </p>
+          )}
+          {engineId === 'kokoro' && !modelReady && (
             <p className="text-xs text-slate-500">
               The first voice preview downloads the Kokoro voice model (about 90 MB, once), so it
               can take half a minute.
@@ -245,8 +313,11 @@ export function NewEpisodeForm({ providers, voices, modelReady, onCreated }: Pro
             const key = `host-${i}`;
             const sample = `Hi, I'm ${host.name || 'your host'}. Welcome to the show!`;
             // Each personality has its own kind of voice: deep male or upbeat female.
-            const choices = voices.filter((v) => v.gender === persona.gender);
-            const autoVoice = choices.find((v) => v.id === persona.defaultVoice) ?? choices[0];
+            const choices = voices.filter(
+              (v) => v.gender === persona.gender || v.gender === 'neutral',
+            );
+            const autoVoice =
+              choices.find((v) => v.id === persona.defaultVoices[engineId]) ?? choices[0];
             const voiceId = host.voice || autoVoice?.id || '';
             const busy = preview.loading === key;
             const isPlaying = preview.playing === key;
@@ -272,17 +343,19 @@ export function NewEpisodeForm({ providers, voices, modelReady, onCreated }: Pro
                       onChange={(e) => updateHost(i, { voice: e.target.value })}
                     >
                       <option value="">Default ({autoVoice?.name ?? 'any'})</option>
-                      {(['American', 'British'] as const).map((accent) => (
-                        <optgroup key={accent} label={accent}>
-                          {choices
-                            .filter((v) => v.accent === accent)
-                            .map((v) => (
-                              <option key={v.id} value={v.id}>
-                                {v.name}
-                              </option>
-                            ))}
-                        </optgroup>
-                      ))}
+                      {[...new Set(choices.map((v) => v.accent || 'Other'))]
+                        .sort()
+                        .map((accent) => (
+                          <optgroup key={accent} label={accent}>
+                            {choices
+                              .filter((v) => (v.accent || 'Other') === accent)
+                              .map((v) => (
+                                <option key={v.id} value={v.id}>
+                                  {v.description ? `${v.name} (${v.description})` : v.name}
+                                </option>
+                              ))}
+                          </optgroup>
+                        ))}
                     </select>
                     <button
                       type="button"
@@ -292,7 +365,7 @@ export function NewEpisodeForm({ providers, voices, modelReady, onCreated }: Pro
                       onClick={() =>
                         isPlaying
                           ? preview.stop()
-                          : preview.play(key, voiceId, sample, settings.speed)
+                          : preview.play(key, engineId, voiceId, sample, settings.speed)
                       }
                       className="shrink-0 rounded-md bg-indigo-50 px-3 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
                     >

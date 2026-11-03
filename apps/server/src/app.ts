@@ -6,10 +6,13 @@ import fastifyStatic from '@fastify/static';
 import {
   PodcastSettingsSchema,
   TranscriptSchema,
+  TtsEngineSchema,
+  type EnginesResponse,
   type EpisodesResponse,
   type HealthResponse,
   type ProvidersResponse,
   type VoicePreviewRequest,
+  type TtsEngine,
   type VoicesResponse,
 } from '@paper-podcast/shared';
 import type { ServerConfig } from './config.js';
@@ -19,8 +22,8 @@ import {
   type CommandLocator,
   type ModelLister,
 } from './providers/index.js';
-import { listVoices, type TtsContext } from './tts/index.js';
-import { kokoroModelReady, kokoroWav } from './tts/kokoro.js';
+import { engineStatus, engineVoices, speakLine, type TtsContext } from './tts/index.js';
+import { kokoroModelReady } from './tts/kokoro.js';
 import { EpisodeService, type PipelineDeps } from './pipeline/episodes.js';
 
 export interface BuildAppOptions {
@@ -31,7 +34,9 @@ export interface BuildAppOptions {
   /** Override model listing (used in tests). */
   listModels?: ModelLister;
   /** Override speech for voice previews (used in tests). */
-  speak?: (text: string, voice: string, speed: number) => Promise<Buffer>;
+  speak?: (text: string, voice: string, speed: number, engine: TtsEngine) => Promise<Buffer>;
+  /** Override the TTS context, e.g. a fake fetch for ElevenLabs (used in tests). */
+  tts?: Partial<TtsContext>;
   /** Override pipeline steps (used in tests). */
   pipeline?: Partial<PipelineDeps>;
   /** Built web app to serve at `/`, if present. */
@@ -45,11 +50,11 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const { config } = options;
   const app = Fastify({ logger: options.logger ?? false });
   const locateCommand = options.locateCommand ?? defaultLocator;
-  const tts: TtsContext = { modelsDir: config.modelsDir };
+  const tts: TtsContext = { modelsDir: config.modelsDir, dataDir: config.dataDir, ...options.tts };
   const speak =
     options.speak ??
-    ((text: string, voice: string, speed: number) =>
-      kokoroWav(config.modelsDir, text, voice, speed));
+    ((text: string, voice: string, speed: number, engine: TtsEngine) =>
+      speakLine(tts, engine, text, voice, { speed }));
   const previews = new Map<string, Buffer>();
 
   const episodes = new EpisodeService({
@@ -72,25 +77,44 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     providers: await detectProviders(locateCommand, options.listModels),
   }));
 
-  app.get('/api/voices', async (): Promise<VoicesResponse> => ({
-    voices: await listVoices(),
-    modelReady: await kokoroModelReady(config.modelsDir),
-  }));
+  app.get('/api/engines', async (): Promise<EnginesResponse> => engineStatus(tts));
+
+  app.get<{ Querystring: { engine?: string } }>('/api/voices', async (request, reply) => {
+    const engine = TtsEngineSchema.safeParse(request.query.engine ?? 'kokoro');
+    if (!engine.success) return reply.code(400).send({ error: 'Unknown engine' });
+    try {
+      const response: VoicesResponse = {
+        engine: engine.data,
+        voices: await engineVoices(tts, engine.data),
+        modelReady: engine.data !== 'kokoro' || (await kokoroModelReady(config.modelsDir)),
+      };
+      return response;
+    } catch (error) {
+      return reply.code(502).send({ error: (error as Error).message });
+    }
+  });
 
   // Speaks a short sample so the user can hear a voice before choosing it.
   app.post<{ Body: VoicePreviewRequest }>('/api/voices/preview', async (request, reply) => {
     const { voice, text, speed } = request.body ?? ({} as VoicePreviewRequest);
-    const known = (await listVoices()).some((v) => v.id === voice);
+    const engine = TtsEngineSchema.safeParse(request.body?.engine ?? 'kokoro');
+    if (!engine.success) return reply.code(400).send({ error: 'Unknown engine' });
+    let known: boolean;
+    try {
+      known = (await engineVoices(tts, engine.data)).some((v) => v.id === voice);
+    } catch (error) {
+      return reply.code(502).send({ error: (error as Error).message });
+    }
     if (!known) return reply.code(400).send({ error: 'Unknown voice' });
     const sample =
       (text ?? '').trim().slice(0, 300) ||
       'Hi! Welcome to the show. Today we are reading a new paper together.';
     const rate = Math.min(1.3, Math.max(0.7, Number(speed) || 1));
-    const key = `${voice}|${rate}|${sample}`;
+    const key = `${engine.data}|${voice}|${rate}|${sample}`;
     let wav = previews.get(key);
     if (!wav) {
       try {
-        wav = await speak(sample, voice, rate);
+        wav = await speak(sample, voice, rate, engine.data);
       } catch (error) {
         return reply.code(502).send({ error: (error as Error).message });
       }
