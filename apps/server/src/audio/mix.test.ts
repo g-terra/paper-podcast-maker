@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gapBefore, mixConversation, trimSilence, type MixLine } from './mix.js';
+import { gapBefore, mixConversation, pauseForReaction, trimSilence, type MixLine } from './mix.js';
 import { readWav } from './wav.js';
 
 const RATE = 1000; // 1 sample = 1 ms keeps the arithmetic readable
@@ -30,6 +30,15 @@ describe('gapBefore', () => {
   });
 });
 
+describe('pauseForReaction', () => {
+  it('finds a breath in the second half, and nothing in continuous speech', () => {
+    const speech = new Int16Array(3000).fill(1000);
+    speech.fill(0, 2000, 2250);
+    expect(pauseForReaction(speech, RATE)).toBe(2060);
+    expect(pauseForReaction(new Int16Array(3000).fill(1000), RATE)).toBeNull();
+  });
+});
+
 describe('mixConversation', () => {
   it('places lines one after another with a pause', () => {
     const out = readWav(mixConversation([line('A', 'Hello.', 1000), line('B', 'Hi.', 1000)]));
@@ -43,7 +52,7 @@ describe('mixConversation', () => {
     const withReaction = readWav(
       mixConversation([
         line('A', 'Hello.', 1000),
-        line('B', 'Mm-hmm.', 200, true),
+        line('B', 'Right.', 200, true),
         line('A', 'More.', 1000),
       ]),
     );
@@ -51,6 +60,21 @@ describe('mixConversation', () => {
     expect(withReaction.samples.length).toBeLessThan(solo.samples.length + 200);
     // Somewhere the two voices add up.
     expect(Math.max(...withReaction.samples)).toBeGreaterThan(1000);
+  });
+
+  it('slips a backchannel into a pause in the previous line', () => {
+    // 1.3 s of speech, a 300 ms breath, then 1 s more.
+    const speech = new Int16Array(2600).fill(1000);
+    speech.fill(0, 1300, 1600);
+    const out = readWav(
+      mixConversation([
+        { pcm: { sampleRate: RATE, samples: speech }, speaker: 'A', text: 'One. Two.' },
+        line('B', 'Right.', 200, true),
+      ]),
+    );
+    // The reaction (700 after gain) sits in the breath, not on top of the speech.
+    expect(out.samples[1400]).toBe(700);
+    expect(Math.max(...out.samples)).toBe(1000);
   });
 
   it('starts an interruption before the previous line ends', () => {
