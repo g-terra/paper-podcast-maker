@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import type { TtsEngine } from '@paper-podcast/shared';
 import { api } from './api';
 
 /** Plays short voice samples; only one at a time. */
@@ -15,12 +16,12 @@ export function useVoicePreview() {
   }, []);
 
   const play = useCallback(
-    async (key: string, voice: string, text: string, speed: number) => {
+    async (key: string, engine: TtsEngine, voice: string, text: string, speed: number) => {
       stop();
       setError(null);
       setLoading(key);
       try {
-        const blob = await api.previewVoice({ voice, text, speed });
+        const blob = await api.previewVoice({ engine, voice, text, speed });
         const url = URL.createObjectURL(blob);
         const el = new Audio(url);
         audio.current = el;

@@ -26,6 +26,8 @@ You need Node.js 22+, pnpm (`corepack enable`), and:
    - [Codex CLI](https://github.com/openai/codex) (`codex`), signed in.
 2. **Nothing else for voices.** Voices come from **Kokoro**, which runs inside the app: natural-sounding American and British English voices you can preview in the app. The first preview or episode downloads the model once (about 90 MB, into `~/.paper-podcast-maker/models`).
 
+   **Optional: ElevenLabs voices.** Pick "ElevenLabs" as the voice engine in the app to use the voices in your ElevenLabs account instead. Put your API key in `.env.local` in the project folder (`ELEVENLABS_API_KEY=sk_…`, git ignores it) or set `ELEVENLABS_API_KEY`, then `ppm restart`. This is a cloud service: the script text is sent to ElevenLabs and uses your credits. A key limited to text-to-speech and reading voices is enough.
+
 Then, from the repo folder:
 
 ```sh
@@ -109,7 +111,7 @@ Other scripts, run from the repo root:
 | `pnpm format`    | Prettier.                          |
 | `pnpm check`     | Everything CI runs.                |
 
-Server settings: `PPM_HOST`, `PPM_PORT`, `PPM_DATA_DIR`, `PPM_MODELS_DIR`, `PPM_KOKORO_DTYPE` (default `q8`), `PPM_AI_TIMEOUT_MS` (default 15 minutes). The web dev server reads `PPM_SERVER_URL` to know where to proxy.
+Server settings: `PPM_HOST`, `PPM_PORT`, `PPM_DATA_DIR`, `PPM_MODELS_DIR`, `PPM_KOKORO_DTYPE` (default `q8`), `PPM_AI_TIMEOUT_MS` (default 15 minutes), `ELEVENLABS_API_KEY`, `PPM_ELEVENLABS_MODEL` (default `eleven_multilingual_v2`). The web dev server reads `PPM_SERVER_URL` to know where to proxy.
 
 ## License
 

@@ -10,8 +10,8 @@ import {
 } from '@paper-podcast/shared';
 import { extractPdfText } from '../pdf.js';
 import { getProvider, type CommandLocator } from '../providers/index.js';
-import { assignVoices, type TtsContext } from '../tts/index.js';
-import { kokoroModelReady, kokoroVoices, kokoroWav } from '../tts/kokoro.js';
+import { assignVoices, engineVoices, speakLine, type TtsContext } from '../tts/index.js';
+import { kokoroModelReady } from '../tts/kokoro.js';
 import { readWav } from '../audio/wav.js';
 import { mixConversation, type MixLine } from '../audio/mix.js';
 import { buildTranscriptPrompt, parseTranscript, wordTargets } from './prompt.js';
@@ -237,28 +237,33 @@ export class EpisodeService {
     settings: PodcastSettings,
     dir: string,
   ) {
-    const installed = await kokoroVoices();
+    const engine = settings.engine;
+    const installed = (await engineVoices(this.deps.tts, engine)).map((v) => v.id);
     const voices = assignVoices(
-      settings.hosts.map((h) => h.voice),
+      // A voice from another engine (settings saved before switching) means "pick one".
+      settings.hosts.map((h) => (installed.includes(h.voice) ? h.voice : '')),
       installed,
+      [],
     );
     const voiceFor = new Map(settings.hosts.map((h, i) => [h.name, voices[i] ?? '']));
-    if (!(await kokoroModelReady(this.deps.tts.modelsDir))) {
+    if (engine === 'kokoro' && !(await kokoroModelReady(this.deps.tts.modelsDir))) {
       await this.update(episode, {
         detail: 'Downloading the Kokoro voice model (once, about 90 MB)',
       });
     }
 
+    const { lines } = transcript;
     const clips: MixLine[] = [];
-    for (const [i, line] of transcript.lines.entries()) {
+    for (const [i, line] of lines.entries()) {
       await this.update(episode, {
-        detail: `Voicing line ${i + 1} of ${transcript.lines.length}`,
+        detail: `Voicing line ${i + 1} of ${lines.length}`,
       });
-      const wav = await kokoroWav(
-        this.deps.tts.modelsDir,
+      const wav = await speakLine(
+        this.deps.tts,
+        engine,
         line.text,
         voiceFor.get(line.speaker) ?? '',
-        settings.speed,
+        { speed: settings.speed, previousText: lines[i - 1]?.text, nextText: lines[i + 1]?.text },
       );
       clips.push({
         pcm: readWav(wav),
