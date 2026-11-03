@@ -52,11 +52,18 @@ The spoken script must be between ${min} and ${max} words in total (aim for abou
 - Open with a short hook and introduce the paper (title and authors if known). Close with key takeaways.
 - Cover the problem, the core idea, how it was tested, the main results, and the limitations. Stay faithful to the paper; do not invent results or numbers.
 - Write for the ear: no markdown, no bullet points, no URLs, no stage directions, no sound effects. Spell out symbols and read equations in words.
-- Each turn is one host speaking; keep most turns under 120 words.
+- Each turn is one host speaking; keep most turns under 120 words, and vary the length: some turns are a single short sentence.
+
+## Make it sound like real people talking
+- Use contractions and spoken phrasing ("it's", "you know", "so basically", "wait, really?"). Start some turns with "So", "Okay", "Right", "Yeah, and".
+- Hosts react to each other: quick reactions ("Huh.", "No way.", "Exactly."), follow-up questions, light humour, and the odd self-correction ("it's about, well, more like a third").
+- Sometimes a host cuts in before the other finishes: end the interrupted turn with an em dash (—) mid-thought and let the next host pick it up.
+- Add short backchannels the listener hears under the other host's speech: a separate line of one to three words ("Mm-hmm.", "Right.", "Oh, interesting.") with "overlap": true. Use them a few times per episode, never two in a row, and always from a different host than the line before.
+- Don't overdo fillers ("um", "uh"): at most a few in the whole episode.
 ${feedback ? `\n## Feedback on the previous draft\n${feedback}\n` : ''}
 ## Output format
 Reply with only a JSON object, no commentary and no code fences:
-{"title": "<episode title>", "lines": [{"speaker": <one of ${names}>, "text": "<what they say>"}]}
+{"title": "<episode title>", "lines": [{"speaker": <one of ${names}>, "text": "<what they say>"}, {"speaker": <one of ${names}>, "text": "Mm-hmm.", "overlap": true}]}
 
 ## The paper
 <paper>
@@ -77,7 +84,9 @@ export function parseTranscript(output: string, settings: PodcastSettings): Tran
   const lines = parsed.data.lines.map((line) => {
     const speaker = byName.get(line.speaker.toLowerCase());
     if (!speaker) throw new Error(`The AI used an unknown speaker "${line.speaker}"`);
-    return { speaker, text: line.text };
+    return line.overlap
+      ? { speaker, text: line.text, overlap: true }
+      : { speaker, text: line.text };
   });
   return { title: parsed.data.title, lines };
 }

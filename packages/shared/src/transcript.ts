@@ -4,6 +4,11 @@ export const TranscriptLineSchema = z.object({
   /** Name of the host speaking; matches a `Host.name` from the settings. */
   speaker: z.string().trim().min(1),
   text: z.string().trim().min(1),
+  /**
+   * A short reaction ("Mm-hmm.", "Right!") spoken over the end of the previous
+   * line instead of after it.
+   */
+  overlap: z.boolean().optional(),
 });
 export type TranscriptLine = z.infer<typeof TranscriptLineSchema>;
 

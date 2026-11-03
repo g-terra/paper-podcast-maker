@@ -19,7 +19,14 @@ export function loadKokoro(modelsDir: string): Promise<KokoroTTS> {
       const { env } = await import('@huggingface/transformers');
       env.cacheDir = modelsDir;
       const { KokoroTTS } = await import('kokoro-js');
-      return KokoroTTS.from_pretrained(KOKORO_MODEL, { dtype: DTYPE, device: 'cpu' });
+      try {
+        return await KokoroTTS.from_pretrained(KOKORO_MODEL, { dtype: DTYPE, device: 'cpu' });
+      } catch (error) {
+        throw new Error(
+          `Couldn't load the Kokoro voice model (${(error as Error).message}). The first run downloads it from huggingface.co, so check your internet connection, or run \`ppm setup\`.`,
+          { cause: error },
+        );
+      }
     })();
     // Let a failed download be retried on the next episode.
     loading.catch(() => {

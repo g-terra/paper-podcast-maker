@@ -110,7 +110,17 @@ export function EpisodeView({ episode, onChange, onDeleted }: Props) {
           <ol className="space-y-3">
             {transcript.lines.map((line, i) => (
               <li key={i} className="grid gap-1 sm:grid-cols-[6rem_1fr]">
-                <span className="text-sm font-semibold text-indigo-700">{line.speaker}</span>
+                <span className="text-sm font-semibold text-indigo-700">
+                  {line.speaker}
+                  {line.overlap && (
+                    <span
+                      className="ml-1 text-xs font-normal text-slate-400"
+                      title="Spoken over the previous line"
+                    >
+                      (over)
+                    </span>
+                  )}
+                </span>
                 <textarea
                   className="w-full resize-y rounded-md border border-transparent bg-transparent p-1 text-sm leading-relaxed hover:border-slate-200 focus:border-indigo-400 focus:bg-white focus:outline-none"
                   rows={Math.max(2, Math.ceil(line.text.length / 90))}
