@@ -55,6 +55,18 @@ Then open the URL it prints (http://127.0.0.1:8787 unless that port is taken, in
 
 Without linking, use `pnpm ppm <command>` (or `pnpm stop` / `pnpm status`) from the repo root.
 
+### Open it on your phone or another computer (mDNS)
+
+```sh
+ppm start --mdns                      # or: pnpm start --mdns
+```
+
+This listens on your network as well as on `127.0.0.1`, and advertises the app over mDNS (Bonjour), so any device on the same Wi-Fi can open `http://paper-podcast.local:8787`. It also shows up as "Paper Podcast Maker" in Bonjour service browsers. Use `--mdns-name studio` to be `studio.local` instead. The env vars `PPM_MDNS=1` and `PPM_MDNS_NAME` do the same. `ppm restart` keeps the setting, and `ppm restart --no-mdns` turns it off.
+
+The app has no login, so with mDNS on, **anyone on that network can use it** and run your AI CLI through it. Only turn it on for networks you trust. The first time, macOS may ask whether `node` can accept incoming connections: choose Allow.
+
+Other devices resolve `.local` names out of the box on macOS, iOS, Windows 10/11 and most Linux desktops (via Avahi). Android support depends on the browser and version, so if the name doesn't resolve there, use the computer's IP address with the same port.
+
 ### How it works
 
 1. The server extracts the paper's text (scanned PDFs without a text layer need OCR first).
