@@ -12,7 +12,8 @@ import { extractPdfText } from '../pdf.js';
 import { getProvider, type CommandLocator } from '../providers/index.js';
 import { assignVoices, type TtsContext } from '../tts/index.js';
 import { kokoroModelReady, kokoroVoices, kokoroWav } from '../tts/kokoro.js';
-import { concatWav, readWav, type Pcm } from '../audio/wav.js';
+import { readWav } from '../audio/wav.js';
+import { mixConversation, type MixLine } from '../audio/mix.js';
 import { buildTranscriptPrompt, parseTranscript, wordTargets } from './prompt.js';
 
 export interface PipelineDeps {
@@ -248,7 +249,7 @@ export class EpisodeService {
       });
     }
 
-    const clips: Pcm[] = [];
+    const clips: MixLine[] = [];
     for (const [i, line] of transcript.lines.entries()) {
       await this.update(episode, {
         detail: `Voicing line ${i + 1} of ${transcript.lines.length}`,
@@ -259,10 +260,22 @@ export class EpisodeService {
         voiceFor.get(line.speaker) ?? '',
         settings.speed,
       );
-      clips.push(readWav(wav));
+      clips.push({
+        pcm: readWav(wav),
+        speaker: line.speaker,
+        text: line.text,
+        overlap: line.overlap,
+      });
     }
 
     await this.update(episode, { detail: 'Joining the audio' });
-    await writeFile(join(dir, AUDIO_FILE), concatWav(clips));
+    await writeFile(join(dir, AUDIO_FILE), mixConversation(clips, hashSeed(episode.id)));
   }
+}
+
+/** A stable number from an id, so re-recording an episode keeps the same timing. */
+function hashSeed(id: string): number {
+  let h = 2166136261;
+  for (const ch of id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return h >>> 0;
 }
