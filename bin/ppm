@@ -1,0 +1,9 @@
+#!/bin/sh
+# ppm launcher for macOS/Linux. Resolves symlinks so it works when linked onto PATH.
+SELF="$0"
+while [ -L "$SELF" ]; do
+  LINK="$(readlink "$SELF")"
+  case "$LINK" in /*) SELF="$LINK" ;; *) SELF="$(dirname "$SELF")/$LINK" ;; esac
+done
+command -v node >/dev/null 2>&1 || { echo "Install Node.js 22+ from https://nodejs.org first."; exit 1; }
+exec node "$(dirname "$SELF")/ppm.mjs" "$@"

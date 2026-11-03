@@ -14,10 +14,11 @@
     "start": "pnpm --filter @paper-podcast/server start",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
-    "test": "pnpm -r test",
+    "test": "pnpm -r test && vitest run bin",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "ppm": "node bin/ppm.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -32,7 +32,7 @@ const MAX_PDF_BYTES = 100 * 1024 * 1024;
 
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
   const { config } = options;
-  const app = Fastify({ logger: options.logger ?? false });
+  const app = Fastify({ logger: options.logger ?? false, disableRequestLogging: true });
   const locateCommand = options.locateCommand ?? defaultLocator;
   const tts = { piperVoicesDir: config.piperVoicesDir };
 
@@ -49,6 +49,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   app.get('/api/health', async (): Promise<HealthResponse> => ({
     status: 'ok',
+    app: 'paper-podcast-maker',
     version: SERVER_VERSION,
   }));
 

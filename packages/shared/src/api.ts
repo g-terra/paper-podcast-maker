@@ -4,6 +4,8 @@ import type { Transcript } from './transcript.js';
 /** Response of `GET /api/health`. */
 export interface HealthResponse {
   status: 'ok';
+  /** Lets the `ppm` command recognise its own server on a port. */
+  app: 'paper-podcast-maker';
   version: string;
 }
 

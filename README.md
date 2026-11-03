@@ -30,15 +30,28 @@ You need Node.js 22+, pnpm (`corepack enable`), and:
    - **Piper** (natural neural voices, any OS): `pipx install piper-tts`, then download voices (an `.onnx` file plus its `.onnx.json`) from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) into `~/.paper-podcast-maker/piper-voices/`.
    - **eSpeak NG** (robotic, any OS): `brew install espeak-ng` or `apt install espeak-ng`.
 
-Then:
+Then start it with the `ppm` command:
 
 ```sh
-pnpm install
-pnpm build
-pnpm start        # open http://127.0.0.1:8787
+bin/ppm install   # once: makes `ppm` available in any terminal
+ppm open          # installs, builds and starts the app in the background, then opens it
 ```
 
-The app shows which CLIs and voice engines it found. Papers, transcripts and audio are kept in `~/.paper-podcast-maker/` (change it with `PPM_DATA_DIR`).
+Or just double-click **Start Paper Podcast.command** (macOS) or **Start Paper Podcast.cmd** (Windows).
+
+| Command                  | Does                                                                                                                          |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `ppm start [--port N]`   | Starts the app in the background on port 8787, or the next free port if that one is busy. Rebuilds first if the code changed. |
+| `ppm open [--port N]`    | Opens the app in your browser, starting it if needed.                                                                         |
+| `ppm stop [--port N]`    | Stops it. With `--port`, it also stops a copy started with `pnpm start`.                                                      |
+| `ppm restart [--port N]` | Stops it and starts it again.                                                                                                 |
+| `ppm status`             | Shows whether it is running, and where.                                                                                       |
+| `ppm logs`               | Follows the server log.                                                                                                       |
+| `ppm update`             | Runs `git pull` and installs dependencies.                                                                                    |
+
+Without installing the command, use `pnpm ppm <command>` or `node bin/ppm.mjs <command>`. To run in the foreground instead: `pnpm build && pnpm start --port 9000` (or `PPM_PORT=9000 pnpm start`).
+
+The app shows which CLIs and voice engines it found. Papers, transcripts, audio and logs are kept in `~/.paper-podcast-maker/` (change it with `PPM_DATA_DIR`).
 
 ### How it works
 
