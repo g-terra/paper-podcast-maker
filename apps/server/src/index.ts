@@ -11,6 +11,12 @@ try {
   await app.listen({ host: config.host, port: config.port });
   app.log.info(`Data folder: ${config.dataDir}`);
 } catch (error) {
+  if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+    app.log.error(
+      `Port ${config.port} is already in use. Start on another port with \`pnpm start --port <n>\` or PPM_PORT=<n>.`,
+    );
+    process.exit(1);
+  }
   app.log.error(error);
   process.exit(1);
 }

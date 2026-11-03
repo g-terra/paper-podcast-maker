@@ -11,7 +11,10 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @paper-podcast/web --filter @paper-podcast/server dev",
     "build": "pnpm -r build",
-    "start": "pnpm --filter @paper-podcast/server start",
+    "start": "node bin/ppm.mjs start",
+    "stop": "node bin/ppm.mjs stop",
+    "status": "node bin/ppm.mjs status",
+    "ppm": "node bin/ppm.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "test": "pnpm -r test",
