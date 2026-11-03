@@ -32,22 +32,39 @@ export function elevenLabsKeyFromEnv(ctx: ElevenLabsContext): boolean {
   return Boolean((ctx.env ?? process.env).ELEVENLABS_API_KEY?.trim());
 }
 
+/** An ElevenLabs failure; `permission` is set when a restricted key lacks one (e.g. "voices_read"). */
+export class ElevenLabsError extends Error {
+  constructor(
+    message: string,
+    readonly permission?: string,
+  ) {
+    super(message);
+  }
+}
+
 /** Turns an ElevenLabs error reply into a sentence a person can act on. */
-export async function elevenLabsError(res: Response): Promise<Error> {
+export async function elevenLabsError(res: Response): Promise<ElevenLabsError> {
   const body = (await res.json().catch(() => null)) as {
     detail?: string | { message?: string; status?: string };
   } | null;
   const detail =
     typeof body?.detail === 'string' ? body.detail : (body?.detail?.message ?? res.statusText);
+  const missing = /missing the permission (\w+)/i.exec(detail)?.[1];
+  if (missing) {
+    return new ElevenLabsError(
+      `Your ElevenLabs key is missing the "${missing}" permission. Edit the key on elevenlabs.io (Settings, API keys) to allow it. (${detail})`,
+      missing,
+    );
+  }
   if (res.status === 401) {
-    return new Error(
+    return new ElevenLabsError(
       `ElevenLabs rejected the API key. Put a valid key in the project's .env.local (ELEVENLABS_API_KEY=…) and restart. (${detail})`,
     );
   }
   if (res.status === 402 || /quota|credits/i.test(detail)) {
-    return new Error(`Your ElevenLabs account is out of credits. (${detail})`);
+    return new ElevenLabsError(`Your ElevenLabs account is out of credits. (${detail})`);
   }
-  return new Error(`ElevenLabs failed (${res.status}): ${detail}`);
+  return new ElevenLabsError(`ElevenLabs failed (${res.status}): ${detail}`);
 }
 
 async function requireKey(ctx: ElevenLabsContext): Promise<string> {
@@ -85,6 +102,25 @@ export function describeElevenLabsVoice(v: ApiVoice): Voice {
   };
 }
 
+/**
+ * ElevenLabs' default voices, used when a key can speak but not list voices
+ * (a key restricted to text-to-speech lacks "voices_read").
+ */
+export const premadeVoices: Voice[] = [
+  { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah', gender: 'female', accent: 'American' },
+  { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George', gender: 'male', accent: 'British' },
+  { id: 'FGY2WhTYpPnrIDTdsKH5', name: 'Laura', gender: 'female', accent: 'American' },
+  { id: 'nPczCjzI2devNBz1zQrb', name: 'Brian', gender: 'male', accent: 'American' },
+  { id: 'Xb7hH8MSUJpSbSDYk0k2', name: 'Alice', gender: 'female', accent: 'British' },
+  { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', gender: 'male', accent: 'British' },
+  { id: 'XrExE9yKIg1WjnnlVkGX', name: 'Matilda', gender: 'female', accent: 'American' },
+  { id: 'iP95p4xoKVk53GoZ742B', name: 'Chris', gender: 'male', accent: 'American' },
+  { id: 'cgSgspJ2msm6clMCkdW9', name: 'Jessica', gender: 'female', accent: 'American' },
+  { id: 'cjVigY5qzO86Huf0OWal', name: 'Eric', gender: 'male', accent: 'American' },
+  { id: 'pFZP5JQG7iQjIQuC4Bku', name: 'Lily', gender: 'female', accent: 'British' },
+  { id: 'TX3LPaxmHKxFdv7VOQHJ', name: 'Liam', gender: 'male', accent: 'American' },
+];
+
 let voicesCache: { key: string; at: number; voices: Voice[] } | undefined;
 
 /** Voices in the user's ElevenLabs account, alternating women and men so auto hosts differ. */
@@ -96,7 +132,12 @@ export async function elevenLabsVoices(ctx: ElevenLabsContext): Promise<Voice[]>
   const res = await (ctx.fetch ?? fetch)(`${ELEVENLABS_API}/v1/voices`, {
     headers: { 'xi-api-key': key },
   });
-  if (!res.ok) throw await elevenLabsError(res);
+  if (!res.ok) {
+    const error = await elevenLabsError(res);
+    if (error.permission !== 'voices_read') throw error;
+    voicesCache = { key, at: Date.now(), voices: premadeVoices };
+    return premadeVoices;
+  }
   const body = (await res.json()) as { voices?: ApiVoice[] };
   const all = (body.voices ?? []).map(describeElevenLabsVoice);
   const women = all.filter((v) => v.gender === 'female');

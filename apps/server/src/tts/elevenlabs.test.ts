@@ -8,6 +8,7 @@ import {
   elevenLabsKey,
   elevenLabsVoices,
   elevenLabsWav,
+  premadeVoices,
 } from './elevenlabs.js';
 
 const dataDir = () => mkdtemp(join(tmpdir(), 'ppm-11-'));
@@ -83,6 +84,44 @@ describe('ElevenLabs voices', () => {
     await expect(
       elevenLabsVoices({ dataDir: await dataDir(), env: { ELEVENLABS_API_KEY: 'bad' }, fetch: fn }),
     ).rejects.toThrow(/rejected the API key/);
+  });
+});
+
+describe('restricted keys', () => {
+  const missing = (permission: string) =>
+    fakeFetch(() =>
+      Response.json(
+        {
+          detail: {
+            status: 'missing_permissions',
+            message: `The API key you used is missing the permission ${permission} to execute this operation.`,
+          },
+        },
+        { status: 401 },
+      ),
+    ).fn;
+
+  it('falls back to the default voices when the key cannot list voices', async () => {
+    const voices = await elevenLabsVoices({
+      dataDir: await dataDir(),
+      env: { ELEVENLABS_API_KEY: 'tts-only' },
+      fetch: missing('voices_read'),
+    });
+    expect(voices).toBe(premadeVoices);
+  });
+
+  it('names the missing permission when speaking fails', async () => {
+    await expect(
+      elevenLabsWav(
+        {
+          dataDir: await dataDir(),
+          env: { ELEVENLABS_API_KEY: 'k' },
+          fetch: missing('text_to_speech'),
+        },
+        'Hi',
+        'v',
+      ),
+    ).rejects.toThrow(/missing the "text_to_speech" permission/);
   });
 });
 
