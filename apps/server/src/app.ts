@@ -34,7 +34,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const { config } = options;
   const app = Fastify({ logger: options.logger ?? false });
   const locateCommand = options.locateCommand ?? defaultLocator;
-  const tts = { piperVoicesDir: config.piperVoicesDir };
+  const tts = { piperVoicesDir: config.piperVoicesDir, modelsDir: config.modelsDir };
 
   const episodes = new EpisodeService({
     dataDir: config.dataDir,

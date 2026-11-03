@@ -6,7 +6,7 @@ export const AiProviderIdSchema = z.enum(aiProviderIds);
 export type AiProviderId = z.infer<typeof AiProviderIdSchema>;
 
 /** Local text-to-speech engines the server can drive. */
-export const ttsEngineIds = ['say', 'espeak-ng', 'piper', 'sapi'] as const;
+export const ttsEngineIds = ['kokoro', 'say', 'espeak-ng', 'piper', 'sapi'] as const;
 export const TtsEngineIdSchema = z.enum(ttsEngineIds);
 export type TtsEngineId = z.infer<typeof TtsEngineIdSchema>;
 
@@ -74,5 +74,5 @@ export const defaultSettings: PodcastSettings = {
   ],
   audience: 'general',
   tone: '',
-  ttsEngine: 'say',
+  ttsEngine: 'kokoro',
 };

@@ -14,8 +14,10 @@
   "dependencies": {
     "@fastify/multipart": "^10.1.7",
     "@fastify/static": "^10.1.8",
+    "@huggingface/transformers": "3.8.1",
     "@paper-podcast/shared": "workspace:*",
     "fastify": "^5.12.8",
+    "kokoro-js": "^1.2.1",
     "unpdf": "^2.1.0"
   },
   "devDependencies": {
