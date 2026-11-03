@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ppm: start, stop and check the paper-podcast-maker app from a terminal (macOS, Windows, Linux).
-//   ppm start [--port N] [--foreground] | stop | restart | status | open | logs | build | link | help
+//   ppm start [--port N] [--mdns [--mdns-name NAME]] [--foreground] | stop | restart | status | open | logs | build | link | help
 // The server runs in the background; its pid and port are kept in <data folder>/server.json.
 import { spawn, spawnSync } from 'node:child_process';
 import {
@@ -41,11 +41,16 @@ const fail = (s) => console.log(`${paint('31', '✗')} ${s}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const urlFor = (port) => `http://${HOST}:${port}`;
 
+/** The value of `--flag value` or `--flag=value`, else undefined. */
+function flagValue(args, ...names) {
+  const i = args.findIndex((a) => names.includes(a) || names.some((n) => a.startsWith(`${n}=`)));
+  if (i === -1) return undefined;
+  return args[i].includes('=') ? args[i].slice(args[i].indexOf('=') + 1) : args[i + 1];
+}
+
 /** `--port 9000`, `--port=9000` or PPM_PORT; undefined when none was given. */
 function requestedPort(args) {
-  const i = args.findIndex((a) => a === '--port' || a === '-p' || a.startsWith('--port='));
-  const raw =
-    i === -1 ? process.env.PPM_PORT : args[i].includes('=') ? args[i].split('=')[1] : args[i + 1];
+  const raw = flagValue(args, '--port', '-p') ?? process.env.PPM_PORT;
   if (raw === undefined) return undefined;
   const port = Number(raw);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -53,6 +58,36 @@ function requestedPort(args) {
     process.exit(1);
   }
   return port;
+}
+
+const truthy = (value) => /^(1|true|yes|on)$/i.test(value ?? '');
+
+/** mDNS mode: `--mdns`, `--mdns-name NAME` or PPM_MDNS / PPM_MDNS_NAME. Returns the host label or null. */
+function requestedMdns(args) {
+  if (args.includes('--no-mdns')) return null;
+  const name = flagValue(args, '--mdns-name') ?? process.env.PPM_MDNS_NAME;
+  const on = args.includes('--mdns') || name !== undefined || truthy(process.env.PPM_MDNS);
+  if (!on) return null;
+  const label = (name ?? 'paper-podcast')
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, '')
+    .replace(/\.local$/, '');
+  if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(label)) {
+    fail(`Not a valid mDNS name: ${name} (use letters, digits and dashes)`);
+    process.exit(1);
+  }
+  return label;
+}
+
+const mdnsUrl = (state) => `http://${state.mdnsName}.local:${state.port}`;
+
+/** Prints where the app can be reached. */
+function printUrls(state, verb) {
+  ok(`${verb}: ${urlFor(state.port)}`);
+  if (!state.mdnsName) return;
+  ok(`On your network: ${mdnsUrl(state)}`);
+  warn('mDNS mode: anyone on this network can open the app and run your AI CLI through it.');
 }
 
 function readState() {
@@ -82,12 +117,12 @@ async function responds(port) {
   }
 }
 
-function portFree(port) {
+function portFree(port, host = HOST) {
   return new Promise((done) => {
     const probe = createServer()
       .once('error', () => done(false))
       .once('listening', () => probe.close(() => done(true)));
-    probe.listen(port, HOST);
+    probe.listen(port, host);
   });
 }
 
@@ -121,15 +156,15 @@ function ensureBuilt(force = false) {
   }
 }
 
-async function choosePort(args) {
+async function choosePort(args, host) {
   const asked = requestedPort(args);
   if (asked !== undefined) {
-    if (await portFree(asked)) return asked;
+    if (await portFree(asked, host)) return asked;
     fail(`Port ${asked} is already in use. Pick another one, e.g.: ppm start --port ${asked + 1}`);
     process.exit(1);
   }
   for (let port = DEFAULT_PORT; port < DEFAULT_PORT + 20; port++) {
-    if (await portFree(port)) {
+    if (await portFree(port, host)) {
       if (port !== DEFAULT_PORT) warn(`Port ${DEFAULT_PORT} is in use, using ${port} instead.`);
       return port;
     }
@@ -143,12 +178,22 @@ async function choosePort(args) {
 async function start(args) {
   const current = await running();
   if (current) {
-    ok(`Already running: ${urlFor(current.port)} (stop it with: ppm stop)`);
+    printUrls(current, 'Already running');
+    console.log('  Stop it with: ppm stop');
     return current;
   }
   ensureBuilt();
-  const port = await choosePort(args);
-  const env = { ...process.env, PPM_PORT: String(port), PPM_HOST: HOST };
+  const mdnsName = requestedMdns(args);
+  // mDNS mode listens on every interface so other devices can connect; otherwise loopback only.
+  const host = process.env.PPM_HOST ?? (mdnsName ? '0.0.0.0' : HOST);
+  const port = await choosePort(args, host);
+  const env = {
+    ...process.env,
+    PPM_PORT: String(port),
+    PPM_HOST: host,
+    PPM_MDNS: mdnsName ? '1' : '0',
+    ...(mdnsName && { PPM_MDNS_NAME: mdnsName }),
+  };
 
   if (args.includes('--foreground') || args.includes('-f')) {
     console.log(`Starting on ${urlFor(port)} (Ctrl+C to stop)…`);
@@ -168,12 +213,12 @@ async function start(args) {
     stdio: ['ignore', log, log],
   });
   child.unref();
-  const state = { pid: child.pid, port, host: HOST, startedAt: new Date().toISOString() };
+  const state = { pid: child.pid, port, host, mdnsName, startedAt: new Date().toISOString() };
   writeFileSync(STATE, `${JSON.stringify(state, null, 2)}\n`);
 
   for (let i = 0; i < 30; i++) {
     if (await responds(port)) {
-      ok(`App running: ${urlFor(port)}`);
+      printUrls(state, 'App running');
       return state;
     }
     if (!alive(child.pid)) break;
@@ -206,7 +251,8 @@ async function stop() {
 async function status() {
   const state = await running();
   if (state) {
-    ok(`Running: ${urlFor(state.port)} (pid ${state.pid}, since ${state.startedAt})`);
+    printUrls(state, 'Running');
+    console.log(`  pid ${state.pid}, since ${state.startedAt}`);
   } else {
     console.log('Not running. Start it with: ppm start');
     const port = requestedPort(process.argv.slice(3)) ?? DEFAULT_PORT;
@@ -273,9 +319,13 @@ const HELP = `${paint('1', 'ppm: paper-podcast-maker')}
 
   ppm start          start the app in the background (${urlFor(DEFAULT_PORT)}, or the next free port)
       --port N       use port N (or set PPM_PORT)
+      --mdns         also open it to your network as http://paper-podcast.local:<port>
+                     (or set PPM_MDNS=1). Anyone on the network can then use it.
+      --mdns-name N  use N.local instead (or set PPM_MDNS_NAME)
       --foreground   run in this terminal instead
   ppm stop           stop it
-  ppm restart        stop, rebuild, start again (keeps the same port unless --port is given)
+  ppm restart        stop, rebuild, start again (keeps the port and mDNS setting unless
+                     --port, --mdns or --no-mdns is given)
   ppm status         is it running, and where?
   ppm open           open the app in your browser (starts it if needed)
   ppm logs           follow the server log
@@ -295,9 +345,13 @@ switch (cmd) {
     const previous = readState();
     await stop();
     ensureBuilt(true);
-    const portArgs =
-      requestedPort(args) === undefined && previous ? ['--port', String(previous.port)] : args;
-    await start(portArgs);
+    // Keep the previous port and mDNS setting unless new ones are given.
+    const keep = [];
+    if (previous && requestedPort(args) === undefined) keep.push('--port', String(previous.port));
+    if (previous?.mdnsName && !args.some((a) => a.startsWith('--mdns') || a === '--no-mdns')) {
+      keep.push('--mdns-name', previous.mdnsName);
+    }
+    await start([...args, ...keep]);
     break;
   }
   case 'status':
