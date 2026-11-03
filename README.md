@@ -30,20 +30,24 @@ You need Node.js 22+, pnpm (`corepack enable`), and:
    - **Piper** (natural neural voices, any OS): `pipx install piper-tts`, then download voices (an `.onnx` file plus its `.onnx.json`) from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) into `~/.paper-podcast-maker/piper-voices/`.
    - **eSpeak NG** (robotic, any OS): `brew install espeak-ng` or `apt install espeak-ng`.
 
-Then:
+Then, from the repo folder:
 
 ```sh
-pnpm start        # installs, builds and starts the app in the background
+pnpm run setup    # installs, builds, links `ppm`, downloads the Kokoro voices, checks your AI CLIs
+ppm open          # starts the app and opens it in your browser
 ```
 
-Then open the URL it prints (http://127.0.0.1:8787 unless that port is taken, in which case it picks the next free one). The app shows which CLIs and voice engines it found. Papers, transcripts and audio are kept in `~/.paper-podcast-maker/` (change it with `PPM_DATA_DIR`).
+On macOS you can double-click `Setup Paper Podcast.command` instead, which does both. Setup is safe to run again at any time: it prints a ✓/✗ list and says how to fix anything missing (for example `claude auth login` when Claude Code isn't signed in). If your shell says `command not found: ppm` right after setup, run `rehash` or open a new terminal tab.
+
+`ppm open` and `ppm start` print the URL (http://127.0.0.1:8787 unless that port is taken, in which case it picks the next free one). The app shows which CLIs and voice engines it found. Papers, transcripts and audio are kept in `~/.paper-podcast-maker/` (change it with `PPM_DATA_DIR`).
 
 ### The `ppm` command
 
-`pnpm start` runs `bin/ppm.mjs`, a small launcher. Run `pnpm ppm link` once to put it on your PATH as `ppm` (macOS/Linux), then:
+`ppm` is `bin/ppm.mjs`, a small launcher. Setup puts it on your PATH (macOS/Linux; `pnpm ppm link` does just that step). Then:
 
 | Command                  | Does                                                                                   |
 | ------------------------ | -------------------------------------------------------------------------------------- |
+| `ppm setup`              | Installs, builds, gets the Kokoro voices and checks your AI CLIs. Safe to rerun.       |
 | `ppm start`              | Starts the app in the background (builds it first if needed).                          |
 | `ppm start --port 9000`  | Uses another port (or set `PPM_PORT`). Without it, 8787 or the next free port is used. |
 | `ppm start --foreground` | Runs the server in this terminal instead.                                              |
