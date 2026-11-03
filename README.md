@@ -33,12 +33,27 @@ You need Node.js 22+, pnpm (`corepack enable`), and:
 Then:
 
 ```sh
-pnpm install
-pnpm build
-pnpm start        # open http://127.0.0.1:8787
+pnpm start        # installs, builds and starts the app in the background
 ```
 
-The app shows which CLIs and voice engines it found. Papers, transcripts and audio are kept in `~/.paper-podcast-maker/` (change it with `PPM_DATA_DIR`).
+Then open the URL it prints (http://127.0.0.1:8787 unless that port is taken, in which case it picks the next free one). The app shows which CLIs and voice engines it found. Papers, transcripts and audio are kept in `~/.paper-podcast-maker/` (change it with `PPM_DATA_DIR`).
+
+### The `ppm` command
+
+`pnpm start` runs `bin/ppm.mjs`, a small launcher. Run `pnpm ppm link` once to put it on your PATH as `ppm` (macOS/Linux), then:
+
+| Command                  | Does                                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| `ppm start`              | Starts the app in the background (builds it first if needed).                          |
+| `ppm start --port 9000`  | Uses another port (or set `PPM_PORT`). Without it, 8787 or the next free port is used. |
+| `ppm start --foreground` | Runs the server in this terminal instead.                                              |
+| `ppm stop`               | Stops it.                                                                              |
+| `ppm restart`            | Rebuilds and restarts, on the same port.                                               |
+| `ppm status`             | Says whether it is running and on which port.                                          |
+| `ppm open`               | Opens the app in your browser, starting it if needed.                                  |
+| `ppm logs`               | Follows the server log (`~/.paper-podcast-maker/server.log`).                          |
+
+Without linking, use `pnpm ppm <command>` (or `pnpm stop` / `pnpm status`) from the repo root.
 
 ### How it works
 
@@ -52,11 +67,11 @@ The CLI runs with no tools (Claude) or a read-only sandbox in an empty temp fold
 
 This is a [pnpm workspaces](https://pnpm.io/workspaces) monorepo.
 
-| Package                 | Path              | What it is                                                                                                |
-| ----------------------- | ----------------- | --------------------------------------------------------------------------------------------------------- |
-| `@paper-podcast/web`    | `apps/web`        | The UI: React + TypeScript + Tailwind CSS, built with Vite.                                               |
-| `@paper-podcast/server` | `apps/server`     | The local backend (Fastify). Drives the Codex/Claude CLI and local TTS. Listens on `127.0.0.1:8787` only. |
-| `@paper-podcast/shared` | `packages/shared` | Types and Zod schemas (settings, transcript, API) used by both.                                           |
+| Package                 | Path              | What it is                                                                                                                  |
+| ----------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `@paper-podcast/web`    | `apps/web`        | The UI: React + TypeScript + Tailwind CSS, built with Vite.                                                                 |
+| `@paper-podcast/server` | `apps/server`     | The local backend (Fastify). Drives the Codex/Claude CLI and local TTS. Listens on `127.0.0.1` only (port 8787 by default). |
+| `@paper-podcast/shared` | `packages/shared` | Types and Zod schemas (settings, transcript, API) used by both.                                                             |
 
 In development the web app proxies `/api` to the local server, so the two run as one app.
 
@@ -68,6 +83,8 @@ Requirements: Node.js 22+ and pnpm (`corepack enable` gives you the pinned versi
 pnpm install
 pnpm dev          # web on http://localhost:5173, server on http://127.0.0.1:8787
 ```
+
+`PPM_PORT=9000 pnpm dev` moves the dev server (and the web proxy) to another port.
 
 Other scripts, run from the repo root:
 
