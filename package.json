@@ -15,6 +15,7 @@
     "stop": "node bin/ppm.mjs stop",
     "status": "node bin/ppm.mjs status",
     "ppm": "node bin/ppm.mjs",
+    "setup": "node bin/ppm.mjs setup",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "test": "pnpm -r test",
