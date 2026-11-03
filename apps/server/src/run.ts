@@ -15,6 +15,7 @@ export class CommandError extends Error {
   constructor(
     message: string,
     readonly stderr: string,
+    readonly stdout = '',
   ) {
     super(message);
   }
@@ -62,7 +63,7 @@ export function runCommand(
       if (code === 0) resolvePromise({ stdout, stderr });
       else {
         const tail = (stderr.trim() || stdout.trim()).split('\n').slice(-5).join('\n');
-        reject(new CommandError(`${command} exited with code ${code}: ${tail}`, stderr));
+        reject(new CommandError(`${command} exited with code ${code}: ${tail}`, stderr, stdout));
       }
     });
 

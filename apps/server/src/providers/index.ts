@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AiProviderId, ProviderStatus } from '@paper-podcast/shared';
-import { runCommand } from '../run.js';
+import { CommandError, runCommand } from '../run.js';
 import { findOnPath } from './path.js';
 
 export interface GenerateOptions {
@@ -28,7 +28,15 @@ const claude: ProviderDefinition = {
     // because a paper is far too long for a command-line argument.
     const args = ['-p', '--output-format', 'json', '--tools', '', '--no-session-persistence'];
     if (model) args.push('--model', model);
-    const { stdout } = await runCommand(executable, args, { stdin: prompt, timeoutMs });
+    let stdout: string;
+    try {
+      ({ stdout } = await runCommand(executable, args, { stdin: prompt, timeoutMs }));
+    } catch (error) {
+      // On failure the CLI still prints its JSON result; report just its message.
+      const reason = error instanceof CommandError ? claudeErrorText(error.stdout) : undefined;
+      if (reason) throw new Error(`Claude CLI failed: ${reason}`, { cause: error });
+      throw error;
+    }
     let parsed: { result?: unknown; is_error?: boolean };
     try {
       parsed = JSON.parse(stdout) as typeof parsed;
@@ -40,6 +48,16 @@ const claude: ProviderDefinition = {
     return parsed.result;
   },
 };
+
+/** The `result` text of a Claude CLI JSON reply, if the output is one. */
+export function claudeErrorText(stdout: string): string | undefined {
+  try {
+    const parsed = JSON.parse(stdout) as { result?: unknown };
+    return typeof parsed.result === 'string' && parsed.result ? parsed.result : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const codex: ProviderDefinition = {
   id: 'codex',
