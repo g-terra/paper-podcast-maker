@@ -22,7 +22,12 @@ export const providerModels: Record<AiProviderId, ModelOption[]> = {
   codex: [{ id: '', label: 'Codex default model' }],
 };
 
-/** Kokoro reads at this speed by default (1 = normal). */
+/** Text-to-speech engines: Kokoro runs on this machine, ElevenLabs is a cloud service. */
+export const ttsEngineIds = ['kokoro', 'elevenlabs'] as const;
+export const TtsEngineSchema = z.enum(ttsEngineIds);
+export type TtsEngine = z.infer<typeof TtsEngineSchema>;
+
+/** Voices read at this speed by default (1 = normal). */
 export const DEFAULT_SPEED = 1;
 
 export const HostSchema = z.object({
@@ -36,7 +41,7 @@ export const HostSchema = z.object({
   /** Free-form role description, e.g. "curious interviewer" or "paper expert". */
   role: z.string().trim().min(1, 'Host role is required').max(300),
   /**
-   * Kokoro voice id, e.g. "af_heart". Empty means "pick one for me": the
+   * Voice id for the chosen engine (Kokoro "af_heart", or an ElevenLabs voice id). Empty means "pick one for me": the
    * server gives each host a different voice.
    */
   voice: z.string().trim().max(500).default(''),
@@ -69,7 +74,9 @@ export const PodcastSettingsSchema = z
     audience: AudienceLevelSchema,
     /** Optional free-form tone guidance, e.g. "light and playful". */
     tone: z.string().trim().max(300).default(''),
-    /** Kokoro speaking speed: 0.7 (slow) to 1.3 (fast). */
+    /** Which engine voices the episode. */
+    engine: TtsEngineSchema.default('kokoro'),
+    /** Speaking speed: 0.7 (slow) to 1.3 (fast). ElevenLabs tops out at 1.2. */
     speed: z.number().min(0.7).max(1.3).default(DEFAULT_SPEED),
   })
   .refine((s) => s.minMinutes <= s.maxMinutes, {
@@ -90,5 +97,6 @@ export const defaultSettings: PodcastSettings = {
   ],
   audience: 'general',
   tone: '',
+  engine: 'kokoro',
   speed: DEFAULT_SPEED,
 };
