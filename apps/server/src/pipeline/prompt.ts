@@ -47,24 +47,36 @@ ${settings.tone ? `\n## Tone\n${settings.tone}\n` : ''}
 ## Length
 The spoken script must be between ${min} and ${max} words in total (aim for about ${target}). This is a hard requirement: it sets the episode length.
 
-## How to write it
-- A natural conversation between the hosts, not a lecture read aloud. Hosts react, ask follow-ups, and build on each other.
-- Open with a short hook and introduce the paper (title and authors if known). Close with key takeaways.
-- Cover the problem, the core idea, how it was tested, the main results, and the limitations. Stay faithful to the paper; do not invent results or numbers.
-- Write for the ear: no markdown, no bullet points, no URLs, no stage directions, no sound effects. Spell out symbols and read equations in words.
-- Each turn is one host speaking; keep most turns under 120 words, and vary the length: some turns are a single short sentence.
+## What to cover
+- Open with a short hook (a question, a surprising fact, or a relatable situation) and introduce the paper: title and authors if known.
+- Cover the problem, the core idea, how it was tested, the main results, and the limitations, then close with what it means for the listener.
+- Stay faithful to the paper. Do not invent results, numbers, quotes or anecdotes about the authors.
 
-## Make it sound like real people talking
-- Use contractions and spoken phrasing ("it's", "you know", "so basically", "wait, really?"). Start some turns with "So", "Okay", "Right", "Yeah, and".
-- Hosts react to each other: quick reactions ("Huh.", "No way.", "Exactly."), follow-up questions, light humour, and the odd self-correction ("it's about, well, more like a third").
-- Sometimes a host cuts in before the other finishes: end the interrupted turn with an em dash (—) mid-thought and let the next host pick it up.
-- Add short backchannels the listener hears under the other host's speech: a separate line of one to three real words ("Right.", "Yeah.", "I see.", "Oh, interesting.") with "overlap": true. Use them a few times per episode, never two in a row, and always from a different host than the line before.
-- The voices read text literally, so never write sounds that aren't words ("Mm-hmm", "Mhm", "Uh-huh", "Hmm", "Mm"): use real words instead.
-- Don't overdo fillers ("um", "uh"): at most a few in the whole episode.
+## Make it sound like people talking, not slides read aloud
+This is the most important part. Listeners should feel they're overhearing two smart friends, not a presentation.
+- Never use written devices: no "label: content" setups ("The idea: …", "His key insight: …", "The result? …", "Bottom line: …", "So the takeaway: …", "Here's the thing: …"), no headline fragments, no lists read out as bullets, no "firstly / secondly". Avoid colons and semicolons in spoken text altogether.
+- Carry each point with a full spoken sentence and a verb: "So what he's arguing is that…", "And it turns out…", "What they actually did was…".
+- Let ideas come out through the back-and-forth. One host asks, guesses or pushes back; the other explains; the first puts it in their own words or asks for an example. Questions should be specific ("Wait, so the model never sees the answers?"), not generic ("What's next?").
+- Lead with a concrete example or picture, then name the technical term. Introduce at most one new term per turn.
+- Vary turn length: plenty of one or two sentence turns, the occasional longer explanation (keep every turn under 100 words).
+- Use contractions and everyday words. A "you know", "I mean" or "kind of" here and there is fine. Skip podcast clichés ("let's dive in", "buckle up", "game-changer", "fascinating", "great question").
+- Short reactions are their own line of one to four real words ("Right.", "Oh, nice.", "Wait, really?"), from a different host than the line before, a few times per episode.
+- Sometimes a host cuts in before the other finishes: end the interrupted turn mid-thought with an em dash (—) and let the other host pick it up.
+- Write only real words. Never write sounds like "Mm-hmm", "Mhm", "Uh-huh", "Hmm" or "um" and "uh", because the voices read text literally.
+- No markdown, URLs, or stage directions. Spell out symbols and read equations in words.
+${
+  settings.engine === 'elevenlabs'
+    ? '- The voices understand a few emotion cues in square brackets, placed inline before the words they affect: [laughs], [chuckles], [sighs], [excited], [curious], [thoughtful]. Use one every several turns at most, only where a real person would react that way.\n'
+    : '- Do not use square-bracket cues or sound effects.\n'
+}
+Bad (reads like a slide): "The core idea: replace recurrence with attention. The result? Faster training."
+Good (sounds like talk): "So what they did was throw out the recurrent part entirely and just use attention." / "Wait, all of it?" / "All of it. And it trained way faster."
+
+Before you answer, read each line as if out loud and rewrite anything that sounds written rather than spoken.
 ${feedback ? `\n## Feedback on the previous draft\n${feedback}\n` : ''}
 ## Output format
 Reply with only a JSON object, no commentary and no code fences:
-{"title": "<episode title>", "lines": [{"speaker": <one of ${names}>, "text": "<what they say>"}, {"speaker": <one of ${names}>, "text": "Right.", "overlap": true}]}
+{"title": "<episode title>", "lines": [{"speaker": <one of ${names}>, "text": "<what they say>"}]}
 
 ## The paper
 <paper>

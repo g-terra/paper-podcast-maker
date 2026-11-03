@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Voice } from '@paper-podcast/shared';
-import { concatWav } from '../audio/wav.js';
+import { concatWav, type Pcm } from '../audio/wav.js';
 
 /**
  * ElevenLabs cloud text-to-speech. The API key comes from ELEVENLABS_API_KEY (the server also
@@ -182,9 +182,93 @@ export async function elevenLabsWav(
     }),
   });
   if (!res.ok) throw await elevenLabsError(res);
+  return concatWav([await pcmFrom(res)], 0);
+}
+
+/** Reads a raw little-endian 16-bit mono PCM reply. */
+async function pcmFrom(res: Response): Promise<Pcm> {
   const raw = Buffer.from(await res.arrayBuffer());
-  // Raw little-endian 16-bit mono PCM.
   const samples = new Int16Array(Math.floor(raw.length / 2));
   for (let i = 0; i < samples.length; i++) samples[i] = raw.readInt16LE(i * 2);
-  return concatWav([{ sampleRate: SAMPLE_RATE, samples }], 0);
+  return { sampleRate: SAMPLE_RATE, samples };
+}
+
+/** The dialogue endpoint takes at most this many characters per request. */
+export const DIALOGUE_MAX_CHARS = 2000;
+export const DIALOGUE_MODEL = process.env.PPM_ELEVENLABS_DIALOGUE_MODEL ?? 'eleven_v3';
+
+export interface DialogueLine {
+  text: string;
+  voice: string;
+}
+
+/**
+ * Splits a script into requests of at most `max` characters, at line boundaries
+ * (a single line that is too long is split between sentences).
+ */
+export function dialogueBatches(lines: DialogueLine[], max = DIALOGUE_MAX_CHARS): DialogueLine[][] {
+  const pieces = lines.flatMap((line) => {
+    if (line.text.length <= max) return [line];
+    const parts: DialogueLine[] = [];
+    let current = '';
+    for (const sentence of line.text.match(/[^.!?]+[.!?]*\s*/g) ?? [line.text]) {
+      if (current && current.length + sentence.length > max) {
+        parts.push({ voice: line.voice, text: current.trim() });
+        current = '';
+      }
+      current += sentence.length > max ? sentence.slice(0, max) : sentence;
+    }
+    if (current.trim()) parts.push({ voice: line.voice, text: current.trim() });
+    return parts;
+  });
+  const batches: DialogueLine[][] = [];
+  let batch: DialogueLine[] = [];
+  let size = 0;
+  for (const piece of pieces) {
+    if (batch.length && size + piece.text.length > max) {
+      batches.push(batch);
+      batch = [];
+      size = 0;
+    }
+    batch.push(piece);
+    size += piece.text.length;
+  }
+  if (batch.length) batches.push(batch);
+  return batches;
+}
+
+/**
+ * Voices a whole conversation with ElevenLabs' dialogue model, which handles turn-taking,
+ * pacing and emotion cues itself. Long scripts go in several requests, joined with a short pause.
+ */
+export async function elevenLabsDialogueWav(
+  ctx: ElevenLabsContext,
+  lines: DialogueLine[],
+  options: {
+    seed?: number;
+    onProgress?: (done: number, total: number) => Promise<void> | void;
+  } = {},
+): Promise<Buffer> {
+  const key = await requireKey(ctx);
+  if (lines.some((l) => !l.voice)) throw new Error('Choose an ElevenLabs voice for every host');
+  const batches = dialogueBatches(lines);
+  const clips: Pcm[] = [];
+  for (const [i, batch] of batches.entries()) {
+    await options.onProgress?.(i, batches.length);
+    const res = await (ctx.fetch ?? fetch)(
+      `${ELEVENLABS_API}/v1/text-to-dialogue?output_format=pcm_${SAMPLE_RATE}`,
+      {
+        method: 'POST',
+        headers: { 'xi-api-key': key, 'content-type': 'application/json', accept: 'audio/pcm' },
+        body: JSON.stringify({
+          inputs: batch.map((l) => ({ text: l.text, voice_id: l.voice })),
+          model_id: DIALOGUE_MODEL,
+          ...(options.seed !== undefined ? { seed: options.seed } : {}),
+        }),
+      },
+    );
+    if (!res.ok) throw await elevenLabsError(res);
+    clips.push(await pcmFrom(res));
+  }
+  return concatWav(clips, 300);
 }

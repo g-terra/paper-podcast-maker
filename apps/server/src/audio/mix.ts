@@ -1,7 +1,7 @@
 /**
  * Joins spoken lines into one conversation track with natural timing:
  * trimmed clip edges, varied gaps, interruptions that cut in early, and
- * short backchannels ("Right.") slipped into a pause in the previous line.
+ * short reactions ("Right.") that follow quickly.
  */
 import { concatWav, resample, type Pcm } from './wav.js';
 
@@ -44,30 +44,6 @@ export function gapBefore(previousText: string, random: () => number): number {
   return 180 + random() * 270;
 }
 
-/**
- * Where a backchannel fits inside a line: just after the last pause (a breath between sentences)
- * in its second half, so the reaction lands between phrases instead of on top of words.
- * Returns an offset into `samples`, or null when the line has no such pause.
- */
-export function pauseForReaction(
-  samples: Int16Array,
-  rate: number,
-  threshold = 400,
-): number | null {
-  const minRun = Math.round(rate * 0.18);
-  const tail = Math.round(rate * 0.4); // leave room for the speaker to carry on afterwards
-  let best: number | null = null;
-  let run = 0;
-  for (let i = Math.floor(samples.length / 2); i < samples.length - tail; i++) {
-    if (Math.abs(samples[i] ?? 0) < threshold) run++;
-    else {
-      if (run >= minRun) best = i - run + Math.round(rate * 0.06);
-      run = 0;
-    }
-  }
-  return best;
-}
-
 export function mixConversation(lines: MixLine[], seed = 1): Buffer {
   const first = lines[0];
   if (!first) throw new Error('No audio to join');
@@ -76,34 +52,20 @@ export function mixConversation(lines: MixLine[], seed = 1): Buffer {
   const ms = (n: number) => Math.round((rate * n) / 1000);
 
   const placed: { start: number; samples: Int16Array; gain: number }[] = [];
-  let mainEnd = 0; // end of the last main (non-overlapping) line
-  let mainStart = 0;
-  let mainSamples: Int16Array = new Int16Array(0);
-  let mainSpeaker = '';
-  let mainText = '';
-  let floor = 0; // the next main line must not start before this
+  let end = 0;
+  let previousText = '';
 
   for (const line of lines) {
     const samples = trimSilence(resample(line.pcm, rate)).samples;
-    const canOverlap = line.overlap && placed.length > 0 && line.speaker !== mainSpeaker;
-    if (canOverlap) {
-      // Slip the reaction, a little quieter, into a pause in the other host's line, or else
-      // just as that line ends.
-      const pause = pauseForReaction(mainSamples, rate);
-      const start = pause !== null ? mainStart + pause : Math.max(mainStart, mainEnd - ms(120));
-      placed.push({ start, samples, gain: 0.7 });
-      floor = Math.max(floor, start + samples.length - ms(80));
-      continue;
-    }
-    const start =
-      placed.length === 0 ? 0 : Math.max(floor, mainEnd + ms(gapBefore(mainText, random)));
+    // Short reactions ("Right.", "Oh, nice.") follow quickly, as their own turn: voiced
+    // separately, they sound pasted on when laid over the other host's words.
+    const reaction = line.overlap || line.text.trim().split(/\s+/).length <= 3;
+    const normal = gapBefore(previousText, random);
+    const gap = reaction ? Math.min(normal, 90 + random() * 90) : normal;
+    const start = placed.length === 0 ? 0 : Math.max(0, end + ms(gap));
     placed.push({ start, samples, gain: 1 });
-    mainStart = start;
-    mainSamples = samples;
-    mainEnd = start + samples.length;
-    mainSpeaker = line.speaker;
-    mainText = line.text;
-    floor = 0;
+    end = start + samples.length;
+    previousText = line.text;
   }
 
   const length = Math.max(...placed.map((p) => p.start + p.samples.length));
