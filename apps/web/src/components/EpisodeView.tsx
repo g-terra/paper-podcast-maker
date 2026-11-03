@@ -107,9 +107,20 @@ export function EpisodeView({ episode, onChange, onDeleted }: Props) {
             )}
           </div>
           {error && <p className="text-sm text-red-700">{error}</p>}
+          {transcript.summary && (
+            <p className="rounded-md bg-slate-50 p-3 text-sm leading-relaxed text-slate-700">
+              {transcript.summary}
+            </p>
+          )}
           <ol className="space-y-3">
             {transcript.lines.map((line, i) => (
               <li key={i} className="grid gap-1 sm:grid-cols-[6rem_1fr]">
+                {line.chapter && (
+                  <h4 className="pt-3 text-sm font-semibold text-slate-800 sm:col-span-2">
+                    {transcript.lines.slice(0, i + 1).filter((l) => l.chapter).length}.{' '}
+                    {line.chapter}
+                  </h4>
+                )}
                 <span className="text-sm font-semibold text-indigo-700">
                   {line.speaker}
                   {line.overlap && (
