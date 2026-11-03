@@ -203,10 +203,21 @@ export class EpisodeService {
     const provider = getProvider(settings.provider);
     const exe = await this.deps.locateCommand(provider.command);
     if (!exe) throw new Error(`${provider.label} (\`${provider.command}\`) was not found on PATH`);
-    return provider.generate(exe, prompt, {
-      model: settings.model,
-      timeoutMs: this.deps.aiTimeoutMs,
-    });
+    try {
+      return await provider.generate(exe, prompt, {
+        model: settings.model,
+        timeoutMs: this.deps.aiTimeoutMs,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/authenticat|log ?in|oauth|unauthori[sz]ed|api key/i.test(message)) {
+        throw new Error(
+          `${provider.label} is not signed in. Run \`${provider.command}\` in a terminal and log in, then try again.\n\n${message}`,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
   }
 
   private async speak(episode: Episode, transcript: Transcript) {

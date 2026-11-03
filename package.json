@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @paper-podcast/web --filter @paper-podcast/server dev",
     "build": "pnpm -r build",
+    "start": "pnpm --filter @paper-podcast/server start",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "test": "pnpm -r test",
